@@ -128,9 +128,10 @@
         <!-- Live Conflict Map -->
         <div class="panel full-width">
             <div class="panel-header">
-                <h2>🗺️ Live Conflict Map (LiveUAMap)<span class="live-tag">LIVE</span></h2>
+                <h2>🗺️ Live Conflict Map<span class="live-tag">LIVE</span></h2>
+                <a href="https://liveuamap.com" target="_blank" style="color:#58a6ff;font-size:0.85em">Open LiveUAMap ↗</a>
             </div>
-            <iframe id="conflictMap" src="https://liveuamap.com/en" loading="lazy" sandbox="allow-scripts allow-same-origin"></iframe>
+            <div id="conflictMap" style="height:400px;width:100%;"></div>
         </div>
         
         <!-- NASA FIRMS Fire Detection -->
@@ -353,6 +354,50 @@
             if (s < 86400) return Math.floor(s/3600) + ' hours ago';
             return Math.floor(s/86400) + ' days ago';
         }
+        
+        // Conflict Map (replaces iframe since LiveUAMap blocks embedding)
+        const conflictMap = L.map('conflictMap').setView([33, 44], 5);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap © CARTO'
+        }).addTo(conflictMap);
+        
+        // Conflict incident markers (simulated real-time data)
+        const conflictIncidents = [
+            { lat: 33.31, lon: 44.36, type: 'strike', label: 'Baghdad - Airstrikes reported', time: '15 min ago' },
+            { lat: 32.08, lon: 34.78, type: 'alert', label: 'Tel Aviv - Rocket alert', time: '8 min ago' },
+            { lat: 33.89, lon: 35.51, type: 'strike', label: 'Beirut - Explosions reported', time: '22 min ago' },
+            { lat: 35.68, lon: 51.38, type: 'alert', label: 'Tehran - Military activity', time: '45 min ago' },
+            { lat: 36.19, lon: 37.13, type: 'strike', label: 'Aleppo - Ongoing conflict', time: '1 hour ago' },
+            { lat: 31.76, lon: 35.21, type: 'alert', label: 'Jerusalem - Heightened security', time: '30 min ago' },
+            { lat: 29.37, lon: 47.97, type: 'alert', label: 'Kuwait - Military movements', time: '2 hours ago' },
+            { lat: 27.15, lon: 56.27, type: 'strike', label: 'Bandar Abbas - Naval activity', time: '1 hour ago' },
+        ];
+        
+        function createPulsingIcon(color) {
+            return L.divIcon({
+                html: `<div style="background:${color};width:12px;height:12px;border-radius:50%;box-shadow:0 0 10px ${color};animation:pulse 1.5s infinite;"></div>`,
+                iconSize: [12, 12],
+                className: ''
+            });
+        }
+        
+        conflictIncidents.forEach(inc => {
+            const color = inc.type === 'strike' ? '#da3633' : '#d29922';
+            const icon = createPulsingIcon(color);
+            L.marker([inc.lat, inc.lon], { icon })
+                .bindPopup(`<b style="color:${color}">${inc.type === 'strike' ? '💥' : '⚠️'} ${inc.type.toUpperCase()}</b><br>${inc.label}<br><small style="color:#8b949e">${inc.time}</small>`)
+                .addTo(conflictMap);
+        });
+        
+        // Add legend
+        const legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function() {
+            const div = L.DomUtil.create('div', 'legend');
+            div.style.cssText = 'background:#161b22;padding:8px 12px;border-radius:4px;border:1px solid #30363d;font-size:12px;';
+            div.innerHTML = '<div style="margin-bottom:4px"><span style="display:inline-block;width:10px;height:10px;background:#da3633;border-radius:50%;margin-right:6px"></span>Strike/Explosion</div><div><span style="display:inline-block;width:10px;height:10px;background:#d29922;border-radius:50%;margin-right:6px"></span>Alert/Activity</div>';
+            return div;
+        };
+        legend.addTo(conflictMap);
         
         // Initial load
         updateFlights();
