@@ -25,6 +25,16 @@
 
 ---
 
+## Live Demo
+
+<div align="center">
+<img src="assets/screenshot.png" alt="Clawdwatch Live" width="800"/>
+</div>
+
+*Real-time data: 204 flights tracked, live news from Al Jazeera, multi-source aggregation*
+
+---
+
 ## Special Thanks
 
 Huge thanks to **Claude** ([@claude](https://github.com/claude)) for the foundational contributions to the agent architecture and intelligence correlation engine. This project wouldn't exist without that work.
@@ -35,8 +45,6 @@ Huge thanks to **Claude** ([@claude](https://github.com/claude)) for the foundat
 
 We're living through a critical moment. As the US-Iran conflict escalates, information becomes both a weapon and a casualty. Governments on all sides control narratives. Social media is flooded with propaganda. News outlets pick sides. Regular people — the ones actually affected by airstrikes, sanctions, and chaos — are left trying to figure out what's real.
 
-During the 2020 Iran missile strikes, flight tracking enthusiasts on Twitter spotted diversions before news outlets reported anything. During Ukraine, OSINT researchers using public satellite imagery exposed troop movements that governments denied. Open-source intelligence isn't just for analysts anymore — it's how civilians protect themselves and each other.
-
 **Clawdwatch exists because:**
 - Mainstream media is slow and often biased
 - Governments lie or withhold information
@@ -44,59 +52,52 @@ During the 2020 Iran missile strikes, flight tracking enthusiasts on Twitter spo
 - People in conflict zones deserve real-time, verified intel
 - The tools exist — they just need to be connected
 
-This is about democratizing situational awareness. If a missile is heading somewhere, if flights are diverting, if ships are going dark — people should know before it hits the news cycle.
-
 ---
 
-## What is Clawdwatch?
+## What's Working NOW
 
-**Clawdwatch** is an autonomous OSINT (Open Source Intelligence) agent that monitors, aggregates, and analyzes publicly available data from multiple sources — giving you real-time situational awareness during conflicts and global events.
-
-No propaganda. No bias. Just data.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  FLIGHT TRACKING      │  SHIP TRACKING       │  SATELLITE      │
-├─────────────────────────────────────────────────────────────────┤
-│  LIVE FEEDS           │  NEWS AGGREGATION    │  VERIFICATION   │
-├─────────────────────────────────────────────────────────────────┤
-│                    🦀 CLAWDWATCH AGENT                          │
-│               Correlate → Analyze → Alert                       │
-└─────────────────────────────────────────────────────────────────┘
-```
+| Source | Status | Data |
+|--------|--------|------|
+| ✈️ **Flight Tracking** | ✅ LIVE | OpenSky Network — 200+ flights in real-time |
+| 📰 **News Aggregation** | ✅ LIVE | Al Jazeera, AP News — multi-source headlines |
+| 📱 **Telegram Alerts** | ✅ LIVE | Push notifications for military/emergency aircraft |
+| 🌐 **Social Monitoring** | ✅ LIVE | Reddit OSINT feeds |
+| 🐦 **Twitter/X** | 🔑 Ready | Needs API bearer token |
+| 🛰️ **Satellite Imagery** | 🔑 Ready | Sentinel Hub integration built |
+| 🚢 **Ship Tracking** | 🔑 Ready | AIS integration framework |
 
 ---
 
 ## Features
 
-**Multi-Source Monitoring**
-- Flight Tracking — ADS-B Exchange, military aircraft movements
-- Ship Tracking — AIS data, naval movements, tanker activity
-- Satellite Imagery — Sentinel Hub integration
-- Social Media — Twitter/X, Telegram, Reddit scraping
-- News Feeds — Multi-language, multi-perspective
+**Real-Time Flight Tracking**
+- Military aircraft detection (NATO callsigns)
+- Emergency squawk monitoring (7500, 7600, 7700)
+- Regional filtering (Middle East, Europe, USA, Asia)
+- Live altitude, speed, origin data
 
-**AI-Powered Analysis**
-- Anomaly Detection — Flags unusual patterns
-- Correlation Engine — Connects dots across sources
-- Propaganda Filter — Identifies manipulation techniques
-- Auto-Summarization — Plain language briefings
-- Verification — Cross-references claims
+**News Aggregation**
+- Al Jazeera Middle East feed
+- AP News conflict coverage
+- Multi-language support ready
+- Auto-refresh every 60 seconds
 
----
+**Social Media Intelligence**
+- Reddit OSINT monitoring
+- Twitter/X integration (with API key)
+- First-hand account filtering
+- Conflict keyword tracking
 
-## Intelligence Sources
+**Satellite Imagery** (with Sentinel Hub credentials)
+- Monitor key locations (Bandar Abbas, Bushehr, Strait of Hormuz)
+- Recent imagery fetching
+- Cloud coverage filtering
 
-| Source | Type | Coverage | Update Rate |
-|--------|------|----------|-------------|
-| ADS-B Exchange | Flight | Global | Real-time |
-| MarineTraffic | Naval | Global | Real-time |
-| Sentinel Hub | Satellite | Global | Daily |
-| Twitter/X | Social | Global | Real-time |
-| Telegram | Social | Regional | Real-time |
-| Reuters | News | Global | Hourly |
-| Al Jazeera | News | MENA | Hourly |
-| WebSDR | Radio | Regional | Real-time |
+**Ship Tracking** (with AIS API key)
+- Strategic waterway monitoring
+- Dark ship detection (AIS transponder off)
+- Military vessel alerts
+- Tanker tracking
 
 ---
 
@@ -110,42 +111,76 @@ cp .env.example .env
 npm run watch
 ```
 
-### Live Output
+---
 
-<div align="center">
-<img src="assets/screenshot.png" alt="Clawdwatch Live" width="700"/>
-</div>
+## Configuration
 
-*Real flight data from OpenSky Network — 200+ flights tracked in Middle East region*
+```bash
+# .env file
+
+# Region: middle_east | europe | usa | asia
+WATCH_REGION=middle_east
+
+# Telegram Alerts (get from @BotFather)
+TELEGRAM_BOT_TOKEN=your_token
+TELEGRAM_CHAT_ID=your_chat_id
+
+# Optional APIs
+TWITTER_BEARER_TOKEN=xxx      # Twitter/X monitoring
+SENTINEL_HUB_CLIENT_ID=xxx    # Satellite imagery
+SENTINEL_HUB_CLIENT_SECRET=xxx
+AISSTREAM_API_KEY=xxx         # Ship tracking
+```
 
 ---
 
-## Alert System
+## Telegram Alerts
 
-Clawdwatch pushes alerts when it detects:
+Get instant notifications when:
+- Military aircraft enters monitored airspace
+- Emergency squawk code detected
+- Ship goes dark (AIS off)
 
-- Military aircraft entering monitored airspace
-- Ships disabling AIS transponders (going dark)
-- Unusual flight pattern deviations
-- Emergency squawk codes (7500, 7600, 7700)
-- Correlated activity across multiple sources
+### Setup
 
-### Telegram Setup
+1. Message [@BotFather](https://t.me/BotFather) → `/newbot`
+2. Copy your bot token
+3. Get chat ID from [@userinfobot](https://t.me/userinfobot)
+4. Add to `.env`
 
-1. Message [@BotFather](https://t.me/BotFather) on Telegram
-2. Create a new bot with `/newbot`
-3. Copy your bot token
-4. Get your chat ID (message [@userinfobot](https://t.me/userinfobot))
-5. Add to `.env`:
+---
 
-```bash
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
-```
+## Intelligence Sources
 
-Now you'll get instant alerts when something happens.
+| Source | Type | Coverage | Update |
+|--------|------|----------|--------|
+| OpenSky Network | Flight | Global | Real-time |
+| Al Jazeera | News | MENA | Hourly |
+| AP News | News | Global | Hourly |
+| Reddit | Social | Global | Real-time |
+| Twitter/X | Social | Global | Real-time |
+| Sentinel Hub | Satellite | Global | Daily |
+| AIS Stream | Naval | Global | Real-time |
 
-**Supported Channels:** Telegram (live), Discord (coming soon)
+---
+
+## Monitored Locations
+
+**Nuclear & Military Sites:**
+- Bushehr Nuclear Plant
+- Isfahan Nuclear Site  
+- Natanz Enrichment Facility
+- Bandar Abbas Naval Base
+
+**Strategic Waterways:**
+- Strait of Hormuz
+- Persian Gulf
+- Gulf of Oman
+- Red Sea
+
+**US Military Bases:**
+- Al Udeid Air Base (Qatar)
+- Al Dhafra Air Base (UAE)
 
 ---
 
@@ -153,30 +188,20 @@ Now you'll get instant alerts when something happens.
 
 Clawdwatch runs on the [Clawdbot](https://github.com/clawdbot/clawdbot) agent framework — autonomous AI that actually does things.
 
-```
-┌──────────────────────────────────────────┐
-│           🦀 CLAWDBOT CORE               │
-├──────────────────────────────────────────┤
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
-│  │ SCRAPER │→ │ ANALYZE │→ │  ALERT  │  │
-│  └─────────┘  └─────────┘  └─────────┘  │
-└──────────────────────────────────────────┘
-```
-
 ---
 
 ## Roadmap
 
-- [x] Project scaffolding
-- [x] OpenSky Network flight tracking (LIVE)
-- [x] Telegram alerts (LIVE)
-- [x] News aggregation - Reuters, Al Jazeera, AP (LIVE)
-- [x] Social media monitoring - Reddit, Twitter (LIVE)
-- [x] Satellite imagery framework - Sentinel Hub
-- [x] Ship tracking framework - AIS integration ready
+- [x] Flight tracking (OpenSky Network)
+- [x] News aggregation (Al Jazeera, AP)
+- [x] Telegram alerts
+- [x] Social monitoring (Reddit)
+- [x] Twitter/X integration
+- [x] Satellite imagery (Sentinel Hub)
+- [x] Ship tracking framework
 - [ ] Discord webhook alerts
 - [ ] Web dashboard with live map
-- [ ] AI summarization pipeline
+- [ ] AI-powered summarization
 - [ ] Mobile app
 
 ---
