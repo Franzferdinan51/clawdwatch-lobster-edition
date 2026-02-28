@@ -110,11 +110,13 @@ cp .env.example .env
 npm run watch
 ```
 
-### Demo
+### Live Output
 
 <div align="center">
-<img src="assets/demo.svg" alt="Clawdwatch Demo" width="700"/>
+<img src="assets/screenshot.png" alt="Clawdwatch Live" width="700"/>
 </div>
+
+*Real flight data from OpenSky Network — 200+ flights tracked in Middle East region*
 
 ---
 
