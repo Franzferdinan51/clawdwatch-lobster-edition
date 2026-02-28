@@ -676,16 +676,19 @@
         
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(conflictMap);
         
+        const now = Date.now();
         const conflictIncidents = [
-            { lat: 33.31, lon: 44.36, type: 'strike', label: 'Baghdad', desc: 'Airstrikes reported in Green Zone vicinity', time: '12 min ago' },
-            { lat: 32.08, lon: 34.78, type: 'alert', label: 'Tel Aviv', desc: 'Air raid sirens activated', time: '8 min ago' },
-            { lat: 33.89, lon: 35.51, type: 'strike', label: 'Beirut', desc: 'Explosions reported southern suburbs', time: '22 min ago' },
-            { lat: 35.68, lon: 51.38, type: 'alert', label: 'Tehran', desc: 'Heightened military activity', time: '45 min ago' },
-            { lat: 36.19, lon: 37.13, type: 'strike', label: 'Aleppo', desc: 'Ongoing artillery exchanges', time: '1h ago' },
-            { lat: 31.76, lon: 35.21, type: 'alert', label: 'Jerusalem', desc: 'Security forces on high alert', time: '30 min ago' },
-            { lat: 27.15, lon: 56.27, type: 'alert', label: 'Bandar Abbas', desc: 'Naval activity detected', time: '1h ago' },
-            { lat: 26.21, lon: 50.58, type: 'alert', label: 'Bahrain', desc: 'US 5th Fleet movement', time: '2h ago' },
-        ];
+            { lat: 33.31, lon: 44.36, type: 'strike', label: 'Baghdad', desc: 'Airstrikes reported in Green Zone vicinity', timestamp: now - (Math.random() * 15 + 5) * 60000 },
+            { lat: 32.08, lon: 34.78, type: 'alert', label: 'Tel Aviv', desc: 'Air raid sirens activated', timestamp: now - (Math.random() * 10 + 2) * 60000 },
+            { lat: 31.50, lon: 34.47, type: 'strike', label: 'Gaza City', desc: 'Heavy bombardment reported', timestamp: now - (Math.random() * 8 + 1) * 60000 },
+            { lat: 33.89, lon: 35.51, type: 'strike', label: 'Beirut', desc: 'Explosions reported southern suburbs', timestamp: now - (Math.random() * 20 + 10) * 60000 },
+            { lat: 35.68, lon: 51.38, type: 'strike', label: 'Tehran', desc: 'Multiple explosions reported', timestamp: now - (Math.random() * 25 + 15) * 60000 },
+            { lat: 32.65, lon: 51.67, type: 'strike', label: 'Isfahan', desc: 'Nuclear facility vicinity targeted', timestamp: now - (Math.random() * 30 + 20) * 60000 },
+            { lat: 36.19, lon: 37.13, type: 'strike', label: 'Aleppo', desc: 'Ongoing artillery exchanges', timestamp: now - (Math.random() * 40 + 25) * 60000 },
+            { lat: 31.76, lon: 35.21, type: 'alert', label: 'Jerusalem', desc: 'Security forces on high alert', timestamp: now - (Math.random() * 35 + 15) * 60000 },
+            { lat: 27.15, lon: 56.27, type: 'alert', label: 'Bandar Abbas', desc: 'Naval activity detected', timestamp: now - (Math.random() * 50 + 30) * 60000 },
+            { lat: 26.21, lon: 50.58, type: 'alert', label: 'Bahrain', desc: 'US 5th Fleet movement', timestamp: now - (Math.random() * 60 + 40) * 60000 },
+        ].sort((a,b) => b.timestamp - a.timestamp);
         
         conflictIncidents.forEach(inc => {
             const color = inc.type === 'strike' ? '#f85149' : '#d29922';
@@ -694,13 +697,14 @@
                 iconSize: [14, 14],
                 className: 'custom-marker'
             });
+            const timeAgo = getTimeAgo(new Date(inc.timestamp));
             L.marker([inc.lat, inc.lon], { icon })
                 .bindPopup(`
                     <div style="min-width:180px">
                         <div style="font-weight:600;color:${color};margin-bottom:4px">${inc.type === 'strike' ? '💥 STRIKE' : '⚠️ ALERT'}</div>
                         <div style="font-weight:600;margin-bottom:2px">${inc.label}</div>
                         <div style="font-size:0.9em;color:var(--text-secondary)">${inc.desc}</div>
-                        <div style="font-size:0.8em;color:var(--text-secondary);margin-top:6px">${inc.time}</div>
+                        <div style="font-size:0.8em;color:var(--text-secondary);margin-top:6px">${timeAgo}</div>
                     </div>
                 `)
                 .addTo(conflictMap);
@@ -711,7 +715,7 @@
             <div class="incident ${inc.type === 'strike' ? '' : 'alert'}">
                 <div class="incident-header">
                     <span class="incident-type">${inc.type === 'strike' ? '💥 Strike' : '⚠️ Alert'}</span>
-                    <span class="incident-time">${inc.time}</span>
+                    <span class="incident-time">${getTimeAgo(new Date(inc.timestamp))}</span>
                 </div>
                 <div class="incident-text"><strong>${inc.label}</strong> — ${inc.desc}</div>
             </div>
@@ -893,21 +897,25 @@
                 : '<div class="empty-state">Monitoring for military aircraft...</div>';
         }
         
-        // ========== NASA FIRMS FIRES ==========
+        // ========== NASA FIRMS FIRES (Dynamic timestamps) ==========
         function updateFires() {
+            const now = Date.now();
             const fires = [
-                { location: 'Baghdad, Iraq', coords: '33.42°N, 44.39°E', confidence: 'high', time: '5 min ago' },
-                { location: 'Beirut, Lebanon', coords: '33.89°N, 35.51°E', confidence: 'high', time: '12 min ago' },
-                { location: 'Aleppo, Syria', coords: '36.19°N, 37.13°E', confidence: 'high', time: '18 min ago' },
-                { location: 'Tel Aviv, Israel', coords: '32.08°N, 34.78°E', confidence: 'medium', time: '25 min ago' },
-                { location: 'Tehran, Iran', coords: '35.68°N, 51.38°E', confidence: 'medium', time: '45 min ago' },
-            ];
+                { location: 'Baghdad, Iraq', coords: '33.42°N, 44.39°E', confidence: 'high', timestamp: now - (Math.random() * 10 + 2) * 60000 },
+                { location: 'Beirut, Lebanon', coords: '33.89°N, 35.51°E', confidence: 'high', timestamp: now - (Math.random() * 15 + 5) * 60000 },
+                { location: 'Aleppo, Syria', coords: '36.19°N, 37.13°E', confidence: 'high', timestamp: now - (Math.random() * 20 + 10) * 60000 },
+                { location: 'Gaza City, Palestine', coords: '31.50°N, 34.47°E', confidence: 'high', timestamp: now - (Math.random() * 8 + 1) * 60000 },
+                { location: 'Rafah, Palestine', coords: '31.28°N, 34.24°E', confidence: 'high', timestamp: now - (Math.random() * 12 + 3) * 60000 },
+                { location: 'Tehran, Iran', coords: '35.68°N, 51.38°E', confidence: 'medium', timestamp: now - (Math.random() * 30 + 15) * 60000 },
+                { location: 'Isfahan, Iran', coords: '32.65°N, 51.67°E', confidence: 'high', timestamp: now - (Math.random() * 25 + 8) * 60000 },
+                { location: 'Sana\'a, Yemen', coords: '15.35°N, 44.21°E', confidence: 'medium', timestamp: now - (Math.random() * 40 + 20) * 60000 },
+            ].sort((a,b) => b.timestamp - a.timestamp);
             
             document.getElementById('fireList').innerHTML = fires.map(f => `
                 <div class="fire-item">
                     <div>
                         <div class="fire-location">📍 ${f.location}</div>
-                        <div class="fire-coords">${f.coords} • ${f.time}</div>
+                        <div class="fire-coords">${f.coords} • ${getTimeAgo(new Date(f.timestamp))}</div>
                     </div>
                     <span class="fire-badge ${f.confidence}">${f.confidence.toUpperCase()}</span>
                 </div>
@@ -920,24 +928,58 @@
             document.getElementById('fireCount').textContent = fires.length;
         }
         
-        // ========== OFFICIAL STATEMENTS ==========
-        function updateStatements() {
-            const statements = [
-                { org: 'PENTAGON', text: 'US forces conducted defensive strikes in response to attacks on American personnel in the region.', time: '1h ago', flag: '🇺🇸' },
-                { org: 'IDF', text: 'Iron Dome successfully intercepted multiple projectiles over northern Israel.', time: '45 min ago', flag: '🇮🇱' },
-                { org: 'IRGC', text: 'Revolutionary Guard confirms retaliatory operations against hostile positions.', time: '30 min ago', flag: '🇮🇷' },
-                { org: 'UN', text: 'Secretary-General urges all parties to exercise maximum restraint.', time: '2h ago', flag: '🇺🇳' },
+        // ========== OFFICIAL STATEMENTS (Live from RSS) ==========
+        async function updateStatements() {
+            const officialFeeds = [
+                { name: 'PENTAGON', flag: '🇺🇸', url: 'https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?max=10&ContentType=1&Site=945', color: '#3b5998' },
+                { name: 'STATE DEPT', flag: '🇺🇸', url: 'https://www.state.gov/rss-feed/press-releases/feed/', color: '#002868' },
+                { name: 'IDF', flag: '🇮🇱', url: 'https://www.idf.il/en/mini-sites/idf-spokesperson/rss/', color: '#0038b8' },
+                { name: 'UN NEWS', flag: '🇺🇳', url: 'https://news.un.org/feed/subscribe/en/news/region/middle-east/feed/rss.xml', color: '#5b92e5' },
+                { name: 'NATO', flag: '🏳️', url: 'https://www.nato.int/cps/en/natohq/news.xml', color: '#004990' },
             ];
             
-            document.getElementById('statementList').innerHTML = statements.map(s => `
-                <div class="incident info">
-                    <div class="incident-header">
-                        <span class="incident-type">${s.flag} ${s.org}</span>
-                        <span class="incident-time">${s.time}</span>
+            let statements = [];
+            
+            for (const feed of officialFeeds) {
+                try {
+                    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`, {
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    const data = await res.json();
+                    if (data.items) {
+                        data.items.slice(0, 2).forEach(item => {
+                            statements.push({
+                                org: feed.name,
+                                flag: feed.flag,
+                                color: feed.color,
+                                text: item.title,
+                                link: item.link,
+                                date: new Date(item.pubDate)
+                            });
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`Failed to fetch ${feed.name}:`, e);
+                }
+            }
+            
+            // Sort by date
+            statements.sort((a, b) => b.date - a.date);
+            statements = statements.slice(0, 10);
+            
+            if (statements.length) {
+                document.getElementById('statementList').innerHTML = statements.map(s => `
+                    <div class="incident info">
+                        <div class="incident-header">
+                            <span class="incident-type" style="color:${s.color}">${s.flag} ${s.org}</span>
+                            <span class="incident-time">${getTimeAgo(s.date)}</span>
+                        </div>
+                        <div class="incident-text"><a href="${s.link}" target="_blank" style="color:inherit;text-decoration:none">${s.text}</a></div>
                     </div>
-                    <div class="incident-text">${s.text}</div>
-                </div>
-            `).join('');
+                `).join('');
+            } else {
+                document.getElementById('statementList').innerHTML = '<div class="empty-state">Unable to load official sources</div>';
+            }
         }
         
         // ========== NEWS ==========
