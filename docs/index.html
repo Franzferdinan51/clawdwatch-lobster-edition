@@ -1084,13 +1084,39 @@
         }
         
         // ========== FLIGHT DATA ==========
+        const corsProxies = [
+            url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+            url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`
+        ];
+        
+        async function fetchWithProxy(url, timeout = 12000) {
+            // Try direct first (some APIs allow CORS)
+            try {
+                const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+                if (res.ok) return await res.json();
+            } catch (e) {}
+            
+            // Try proxies
+            for (const proxy of corsProxies) {
+                try {
+                    const res = await fetch(proxy(url), { signal: AbortSignal.timeout(timeout) });
+                    if (res.ok) {
+                        const text = await res.text();
+                        return JSON.parse(text);
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+            throw new Error('All proxies failed');
+        }
+        
         async function fetchFlights() {
             const r = regions[state.region].bounds;
             try {
                 const url = `https://opensky-network.org/api/states/all?lamin=${r.lamin}&lamax=${r.lamax}&lomin=${r.lomin}&lomax=${r.lomax}`;
-                const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-                const res = await fetch(proxy, { signal: AbortSignal.timeout(15000) });
-                const data = await res.json();
+                const data = await fetchWithProxy(url);
                 if (!data.states) return [];
                 return data.states.filter(s => s[1] && s[5] && s[6] && !s[8]).map(s => ({
                     callsign: (s[1] || '').trim(),
@@ -1108,7 +1134,8 @@
         }
         
         async function updateFlights() {
-            document.getElementById('mapStatus').textContent = 'Fetching flights...';
+            document.getElementById('mapStatus').textContent = '📡 Fetching flights...';
+            document.getElementById('mapStatus').style.color = 'var(--accent-yellow)';
             
             const flights = await fetchFlights();
             state.data.flights = flights;
@@ -1116,10 +1143,17 @@
             
             // Update counts
             document.getElementById('flightCount').textContent = flights.length || '—';
-            document.getElementById('militaryCount').textContent = state.data.military.length;
+            document.getElementById('militaryCount').textContent = state.data.military.length || '—';
             document.getElementById('layerFlights').textContent = flights.length;
             document.getElementById('layerMilitary').textContent = state.data.military.length;
-            document.getElementById('mapStatus').textContent = flights.length + ' aircraft tracked';
+            
+            if (flights.length) {
+                document.getElementById('mapStatus').textContent = '✓ ' + flights.length + ' aircraft tracked';
+                document.getElementById('mapStatus').style.color = 'var(--accent-green-bright)';
+            } else {
+                document.getElementById('mapStatus').textContent = '⚠ Flight data unavailable';
+                document.getElementById('mapStatus').style.color = 'var(--accent-red)';
+            }
             
             // Clear existing markers
             markerGroups.flights.clearLayers();
@@ -1182,8 +1216,7 @@
         async function fetchGdeltEvents() {
             try {
                 const url = 'https://api.gdeltproject.org/api/v2/geo/geo?query=conflict%20OR%20protest%20OR%20attack&mode=pointdata&format=geojson&timespan=24h&maxpoints=200';
-                const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-                const data = await res.json();
+                const data = await fetchWithProxy(url, 15000);
                 return data.features || [];
             } catch (e) {
                 console.error('GDELT error:', e);
@@ -1261,27 +1294,40 @@
         }
         
         // ========== NEWS ==========
+        const rssConverters = [
+            url => `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`,
+            url => `https://rss2json.piratenpartij.nl/?rss=${encodeURIComponent(url)}`
+        ];
+        
         async function fetchRSS(feeds, container, limit = 10) {
             let items = [];
             for (const feed of feeds) {
-                try {
-                    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`, {
-                        signal: AbortSignal.timeout(6000)
-                    });
-                    const data = await res.json();
-                    if (data.items) {
-                        data.items.slice(0, 4).forEach(item => {
-                            items.push({
-                                source: feed.name,
-                                color: feed.color,
-                                title: item.title,
-                                link: item.link,
-                                date: new Date(item.pubDate),
-                                breaking: feed.breaking
-                            });
+                let success = false;
+                for (const converter of rssConverters) {
+                    if (success) break;
+                    try {
+                        const res = await fetch(converter(feed.url), {
+                            signal: AbortSignal.timeout(8000)
                         });
+                        const data = await res.json();
+                        const feedItems = data.items || data.feed?.entries || [];
+                        if (feedItems.length) {
+                            feedItems.slice(0, 4).forEach(item => {
+                                items.push({
+                                    source: feed.name,
+                                    color: feed.color,
+                                    title: item.title,
+                                    link: item.link || item.url,
+                                    date: new Date(item.pubDate || item.published || item.date || Date.now()),
+                                    breaking: feed.breaking
+                                });
+                            });
+                            success = true;
+                        }
+                    } catch (e) {
+                        continue;
                     }
-                } catch (e) {}
+                }
             }
             items.sort((a, b) => b.date - a.date);
             items = items.slice(0, limit);
@@ -1296,22 +1342,23 @@
                         <div class="news-title"><a href="${n.link}" target="_blank">${n.title}</a></div>
                     </div>
                 `).join('');
+            } else if (container) {
+                document.getElementById(container).innerHTML = '<div class="loading">News feeds unavailable</div>';
             }
             return items.length;
         }
         
         async function updateNews() {
             const feeds = [
-                { name: 'AL JAZEERA', url: 'https://www.aljazeera.com/xml/rss/all.xml', color: '#d4a847', breaking: true },
-                { name: 'BBC', url: 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml', color: '#bb1919' },
-                { name: 'REUTERS', url: 'https://www.reutersagency.com/feed/?taxonomy=best-regions&post_type=best', color: '#ff8c00' },
-                { name: 'AP', url: 'https://rsshub.app/apnews/topics/apf-middleeast', color: '#ff3b30' },
+                { name: 'BBC', url: 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml', color: '#bb1919', breaking: true },
                 { name: 'GUARDIAN', url: 'https://www.theguardian.com/world/middleeast/rss', color: '#052962' },
                 { name: 'CNN', url: 'http://rss.cnn.com/rss/edition_world.rss', color: '#cc0000' },
+                { name: 'NYT', url: 'https://rss.nytimes.com/services/xml/rss/nyt/MiddleEast.xml', color: '#000' },
+                { name: 'AL JAZEERA', url: 'https://www.aljazeera.com/xml/rss/all.xml', color: '#d4a847' },
             ];
             
             const count = await fetchRSS(feeds, 'newsList', 12);
-            document.getElementById('newsCount').textContent = count;
+            document.getElementById('newsCount').textContent = count || '—';
         }
         
         // ========== ALERTS ==========
