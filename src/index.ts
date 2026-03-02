@@ -6,7 +6,6 @@ import { socialMonitor, SocialPost } from './sources/social';
 import { satelliteTracker } from './sources/satellite';
 import { shipTracker } from './sources/ships';
 import { internetMonitor } from './sources/internet';
-import { runCli, shouldSendShutdownNotice } from './cli';
 
 /**
  * 🦀 CLAWDWATCH
@@ -166,7 +165,7 @@ async function runMonitor() {
   console.log('\n' + '═'.repeat(60));
   console.log(`📊 SUMMARY: ${flightStats.total} flights | ${newsCount} news | ${socialCount} social`);
   
-  if (shouldSendShutdownNotice() && telegramAlerter.isEnabled()) {
+  if (telegramAlerter.isEnabled()) {
     console.log(`📱 Telegram: ✅ Connected`);
   }
   if (satelliteTracker.isEnabled()) {
@@ -199,7 +198,7 @@ async function main() {
   console.log('');
 
   // Startup notification
-  if (shouldSendShutdownNotice() && telegramAlerter.isEnabled()) {
+  if (telegramAlerter.isEnabled()) {
     await telegramAlerter.sendStartup(region);
   }
   
@@ -215,13 +214,10 @@ async function main() {
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n\n🦀 Clawdwatch shutting down...');
-  if (shouldSendShutdownNotice() && telegramAlerter.isEnabled()) {
+  if (telegramAlerter.isEnabled()) {
     await telegramAlerter.send('🦀 Clawdwatch going offline.');
   }
   process.exit(0);
 });
 
-runCli().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+main().catch(console.error);

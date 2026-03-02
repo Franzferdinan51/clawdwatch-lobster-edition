@@ -22,14 +22,14 @@ Real-time open-source intelligence aggregation and analysis.
 # Start monitoring
 clawdwatch start
 
-# Pull a JSON snapshot
-npm run snapshot -- --json --regions middle_east,eastern_europe
+# Check status
+clawdwatch status
 
-# List regions
-npm run regions -- --json
+# Get latest intel briefing
+clawdwatch briefing
 
-# Start the live watcher
-npm run watch -- --regions middle_east
+# Set up alerts
+clawdwatch alert --telegram <chat_id>
 ```
 
 ## Configuration

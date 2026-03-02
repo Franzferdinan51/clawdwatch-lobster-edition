@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { Bounds, RegionName, getRegionDefinition } from '../regions';
 
 /**
  * Flight Tracking Source
@@ -63,7 +62,7 @@ export class FlightTracker {
    * Fetch flights from OpenSky Network (free, no API key required)
    * Bounding box: lat_min, lat_max, lon_min, lon_max
    */
-  async fetchFlights(bounds?: Bounds): Promise<Flight[]> {
+  async fetchFlights(bounds?: { latMin: number; latMax: number; lonMin: number; lonMax: number }): Promise<Flight[]> {
     try {
       let url = 'https://opensky-network.org/api/states/all';
       
@@ -156,9 +155,15 @@ export class FlightTracker {
   /**
    * Get flights in a specific region
    */
-  async getRegion(region: RegionName): Promise<Flight[]> {
-    const regionDefinition = getRegionDefinition(region);
-    return this.fetchFlights(regionDefinition?.flightBounds);
+  async getRegion(region: 'middle_east' | 'europe' | 'usa' | 'asia'): Promise<Flight[]> {
+    const bounds = {
+      middle_east: { latMin: 12, latMax: 42, lonMin: 25, lonMax: 65 },
+      europe: { latMin: 35, latMax: 72, lonMin: -10, lonMax: 40 },
+      usa: { latMin: 24, latMax: 50, lonMin: -125, lonMax: -66 },
+      asia: { latMin: 5, latMax: 55, lonMin: 70, lonMax: 145 },
+    };
+    
+    return this.fetchFlights(bounds[region]);
   }
 
   /**

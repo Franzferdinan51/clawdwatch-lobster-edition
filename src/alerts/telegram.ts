@@ -84,14 +84,14 @@ ${alert.message}
     const message = `
 🦀 <b>CLAWDWATCH ONLINE</b>
 
-Monitoring scope: <b>${region.toUpperCase()}</b>
+Monitoring region: <b>${region.toUpperCase()}</b>
 
 Tracking:
 • Military aircraft movements
 • Emergency squawk codes
 • Flight anomalies
 
-Updates every 60 seconds.
+Updates every 30 seconds.
 `.trim();
 
     return this.send(message);

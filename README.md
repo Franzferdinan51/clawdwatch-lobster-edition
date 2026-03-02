@@ -11,7 +11,7 @@
 
 <br>
 
-### 🦀 CLAWDWATCH LOBSTER EDITION
+### 🦀 THE ALL-SEEING OSINT AGENT
 
 *"See what they don't want you to see"*
 
@@ -21,51 +21,45 @@
 
 <br>
 
-[![Status](https://img.shields.io/badge/STATUS-ACTIVE-red?style=flat-square&labelColor=000)](https://github.com/Franzferdinan51/clawdwatch-lobster-edition)
+[![Status](https://img.shields.io/badge/STATUS-ACTIVE-red?style=flat-square&labelColor=000)](https://github.com/cloudweaver/clawdwatch)
 [![Dashboard](https://img.shields.io/badge/DASHBOARD-LIVE-brightgreen?style=flat-square&labelColor=000)](https://cloudweaver.github.io/clawdwatch/)
-[![HTTP API](https://img.shields.io/badge/HTTP%20API-Port%203444-blue?style=flat-square&labelColor=000)](https://github.com/Franzferdinan51/clawdwatch-lobster-edition)
-[![LM Studio](https://img.shields.io/badge/LM%20Studio-MCP%20Ready-purple?style=flat-square&labelColor=000)](https://lmstudio.ai)
+[![Clawdbot](https://img.shields.io/badge/POWERED%20BY-CLAWDBOT-blue?style=flat-square&labelColor=000)](https://github.com/clawdbot/clawdbot)
 [![License](https://img.shields.io/badge/LICENSE-MIT-green?style=flat-square&labelColor=000)](LICENSE)
 
----
-
-## 🎯 Lobster Edition Features
-
-### HTTP API Server (Port 3444)
-Built-in HTTP API for programmatic access:
-```bash
-curl http://localhost:3444/status      # Health check
-curl http://localhost:3444/osint       # Latest OSINT data
-curl http://localhost:3444/conflict    # Conflict status
-curl http://localhost:3444/flights     # Flight tracking
-curl http://localhost:3444/ships       # Ship tracking
-curl http://localhost:3444/snapshot    # Get snapshot
-curl http://localhost:3444/regions     # List regions
-```
-
-### LM Studio MCP Integration
-Connect to Clawdwatch via LM Studio's MCP bridge:
-- Configure MCP to use HTTP API at `http://localhost:3444`
-- Full OSINT data access from any LM Studio model
-- See [LM Studio MCP Setup](#lm-studio-mcp-setup)
-
-### OpenClaw Integration
-Native OpenClaw skill for AI agent access:
-```bash
-npm run snapshot -- --json --regions middle_east
-```
-See `skill/SKILL.md` for full OpenClaw integration.
-
-### AI Provider Support
-Multiple AI backends supported for intelligence analysis:
-- OpenAI
-- Anthropic
-- Ollama
-- And more via OpenClaw
+</div>
 
 ---
 
-## 🌟 What's Working NOW
+## Live Demo
+
+<div align="center">
+<img src="assets/screenshot.png" alt="Clawdwatch Live" width="800"/>
+</div>
+
+*Real-time data: 204 flights tracked, live news from Al Jazeera, multi-source aggregation*
+
+---
+
+## Special Thanks
+
+Huge thanks to **Claude** ([@claude](https://github.com/claude)) for the foundational contributions to the agent architecture and intelligence correlation engine. This project wouldn't exist without that work.
+
+---
+
+## Why Now?
+
+We're living through a critical moment. As the US-Iran conflict escalates, information becomes both a weapon and a casualty. Governments on all sides control narratives. Social media is flooded with propaganda. News outlets pick sides. Regular people — the ones actually affected by airstrikes, sanctions, and chaos — are left trying to figure out what's real.
+
+**Clawdwatch exists because:**
+- Mainstream media is slow and often biased
+- Governments lie or withhold information
+- Social media is full of propaganda and misinfo
+- People in conflict zones deserve real-time, verified intel
+- The tools exist — they just need to be connected
+
+---
+
+## What's Working NOW
 
 | Source | Status | Data |
 |--------|--------|------|
@@ -75,112 +69,64 @@ Multiple AI backends supported for intelligence analysis:
 | 🌍 **Internet Blackouts** | ✅ LIVE | Monitors 15 countries for outages |
 | 📱 **Telegram Alerts** | ✅ LIVE | Push notifications for military/emergency aircraft |
 | 🌐 **Social Monitoring** | ✅ LIVE | Reddit OSINT feeds |
-| 🚢 **Ship Tracking** | ✅ READY | AIS integration framework |
-| 🛰️ **Satellite Imagery** | ✅ READY | Sentinel Hub integration |
-| 🌐 **HTTP API** | ✅ LIVE | Port 3444 for programmatic access |
-| 🤖 **LM Studio MCP** | ✅ READY | Connect via HTTP API |
+| 🐦 **Twitter/X** | 🔑 Ready | Needs API bearer token |
+| 🛰️ **Satellite Imagery** | 🔑 Ready | Sentinel Hub integration built |
+| 🚢 **Ship Tracking** | 🔑 Ready | AIS integration framework |
 
 ---
 
-## 🚀 Quick Start
+## Features
 
-### Clone & Install
+**Real-Time Flight Tracking**
+- Military aircraft detection (NATO callsigns, RAF, USAF)
+- Emergency squawk monitoring (7500, 7600, 7700)
+- Regional filtering (Middle East, Europe, USA, Asia)
+- Live altitude, speed, origin data
+
+**Internet Blackout Detection**
+- Monitors 15 conflict-zone countries in real-time
+- Detects connectivity drops, degradation, and full blackouts
+- Countries: Iran, Iraq, Syria, Lebanon, Yemen, Israel, Palestine, Saudi Arabia, UAE, Qatar, Bahrain, Kuwait, Jordan, Ukraine, Russia
+- Alerts when countries go dark (often precedes military action)
+
+**News Aggregation**
+- Al Jazeera Middle East feed
+- AP News conflict coverage
+- Multi-language support ready
+- Auto-refresh every 60 seconds
+
+**Social Media Intelligence**
+- Reddit OSINT monitoring
+- Twitter/X integration (with API key)
+- First-hand account filtering
+- Conflict keyword tracking
+
+**Satellite Imagery** (with Sentinel Hub credentials)
+- Monitor key locations (Bandar Abbas, Bushehr, Strait of Hormuz)
+- Recent imagery fetching
+- Cloud coverage filtering
+
+**Ship Tracking** (with AIS API key)
+- Strategic waterway monitoring
+- Dark ship detection (AIS transponder off)
+- Military vessel alerts
+- Tanker tracking
+
+---
+
+## Quick Start
+
 ```bash
-git clone https://github.com/Franzferdinan51/clawdwatch-lobster-edition.git
-cd clawdwatch-lobster-edition
+git clone https://github.com/cloudweaver/clawdwatch.git
+cd clawdwatch
 npm install
 cp .env.example .env
-```
-
-### Run Modes
-
-**CLI Mode (Watch)**
-```bash
 npm run watch
 ```
 
-**HTTP API Server**
-```bash
-npm run start    # Starts on port 3444
-```
-
-**Snapshot**
-```bash
-npm run snapshot -- --json --regions middle_east
-```
-
-**List Regions**
-```bash
-npm run regions -- --json
-```
-
 ---
 
-## 🌐 HTTP API Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /status` | Health check & service info |
-| `GET /osint` | Latest OSINT summary |
-| `GET /conflict` | Conflict status details |
-| `GET /flights` | Current flight data |
-| `GET /ships` | Current ship data |
-| `GET /snapshot` | Get snapshot data |
-| `GET /regions` | List available regions |
-
----
-
-## 🔧 LM Studio MCP Setup
-
-1. Open LM Studio
-2. Go to Settings → MCP Servers
-3. Add a new server configuration:
-   - **Name**: Clawdwatch
-   - **Type**: HTTP
-   - **URL**: `http://localhost:3444`
-4. Save and connect
-
-Or configure via `mcp.json`:
-```json
-{
-  "mcpServers": {
-    "clawdwatch": {
-      "url": "http://localhost:3444"
-    }
-  }
-}
-```
-
----
-
-## 🤖 OpenClaw Integration
-
-Add to your OpenClaw workspace:
-```bash
-npx clawhub install clawdwatch
-```
-
-Or use directly:
-```bash
-npm run snapshot -- --json --regions middle_east,eastern_europe
-```
-
----
-
-## 📱 Telegram Alerts
-
-1. Message [@BotFather](https://t.me/BotFather) → `/newbot`
-2. Copy your bot token
-3. Get chat ID from [@userinfobot](https://t.me/userinfobot)
-4. Add to `.env`:
-```
-TELEGRAM_BOT_TOKEN=your_token
-TELEGRAM_CHAT_ID=your_chat_id
-```
-
----
-
-## ⚙️ Configuration
+## Configuration
 
 ```bash
 # .env file
@@ -188,52 +134,54 @@ TELEGRAM_CHAT_ID=your_chat_id
 # Region: middle_east | europe | usa | asia
 WATCH_REGION=middle_east
 
-# Telegram Alerts
+# Telegram Alerts (get from @BotFather)
 TELEGRAM_BOT_TOKEN=your_token
 TELEGRAM_CHAT_ID=your_chat_id
 
 # Optional APIs
-TWITTER_BEARER_TOKEN=xxx
-SENTINEL_HUB_CLIENT_ID=xxx
+TWITTER_BEARER_TOKEN=xxx      # Twitter/X monitoring
+SENTINEL_HUB_CLIENT_ID=xxx    # Satellite imagery
 SENTINEL_HUB_CLIENT_SECRET=xxx
-AISSTREAM_API_KEY=xxx
+AISSTREAM_API_KEY=xxx         # Ship tracking
 ```
 
 ---
 
-## 🛠️ Scripts
+## Telegram Alerts
 
-| Script | Description |
-|--------|-------------|
-| `npm run watch` | Run CLI in watch mode |
-| `npm run snapshot` | Get OSINT snapshot |
-| `npm run regions` | List available regions |
-| `npm run start` | Start HTTP API server |
-| `npm run http` | Start HTTP API (alias) |
-| `npm run build` | Compile TypeScript |
-| `npm run dev` | Development with hot reload |
+Get instant notifications when:
+- Military aircraft enters monitored airspace
+- Emergency squawk code detected
+- Ship goes dark (AIS off)
 
----
+### Setup
 
-## 📡 Intelligence Sources
-
-| Source | Type | Coverage |
-|--------|------|----------|
-| OpenSky Network | Flight | Global |
-| Al Jazeera | News | MENA |
-| AP News | News | Global |
-| Reddit | Social | Global |
-| Twitter/X | Social | Global |
-| Sentinel Hub | Satellite | Global |
-| AIS Stream | Naval | Global |
+1. Message [@BotFather](https://t.me/BotFather) → `/newbot`
+2. Copy your bot token
+3. Get chat ID from [@userinfobot](https://t.me/userinfobot)
+4. Add to `.env`
 
 ---
 
-## 🌍 Monitored Locations
+## Intelligence Sources
+
+| Source | Type | Coverage | Update |
+|--------|------|----------|--------|
+| OpenSky Network | Flight | Global | Real-time |
+| Al Jazeera | News | MENA | Hourly |
+| AP News | News | Global | Hourly |
+| Reddit | Social | Global | Real-time |
+| Twitter/X | Social | Global | Real-time |
+| Sentinel Hub | Satellite | Global | Daily |
+| AIS Stream | Naval | Global | Real-time |
+
+---
+
+## Monitored Locations
 
 **Nuclear & Military Sites:**
 - Bushehr Nuclear Plant
-- Isfahan Nuclear Site
+- Isfahan Nuclear Site  
 - Natanz Enrichment Facility
 - Bandar Abbas Naval Base
 
@@ -249,30 +197,35 @@ AISSTREAM_API_KEY=xxx
 
 ---
 
-## 🔄 Upstream Sync
+## 🦀 Powered by Clawdbot
 
-This fork syncs from upstream [cloudweaver/clawdwatch](https://github.com/cloudweaver/clawdwatch):
-```bash
-git remote add upstream https://github.com/cloudweaver/clawdwatch
-git fetch upstream
-git merge upstream/main
-```
+Clawdwatch runs on the [Clawdbot](https://github.com/clawdbot/clawdbot) agent framework — autonomous AI that actually does things.
 
 ---
 
-## 🤝 Contributing
+## Roadmap
 
-PRs welcome! Please sync from upstream before submitting.
+- [x] Flight tracking (OpenSky Network)
+- [x] News aggregation (Al Jazeera, AP)
+- [x] Telegram alerts
+- [x] Social monitoring (Reddit)
+- [x] Twitter/X integration
+- [x] Satellite imagery (Sentinel Hub)
+- [x] Ship tracking framework
+- [ ] Discord webhook alerts
+- [ ] Web dashboard with live map
+- [ ] AI-powered summarization
+- [ ] Mobile app
 
 ---
 
-## 📄 License
+## Contributing
 
-MIT
+Built by the people, for the people. PRs welcome.
 
 ---
 
-## ⚠️ Disclaimer
+## Disclaimer
 
 Clawdwatch aggregates **publicly available** information only. It does not access classified data, hack systems, or break any laws. This tool is for **informational purposes** — always verify critical information through official channels.
 

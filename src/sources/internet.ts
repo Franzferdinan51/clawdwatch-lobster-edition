@@ -28,7 +28,6 @@ const MONITORED_COUNTRIES = [
   { code: 'SY', name: 'Syria' },
   { code: 'LB', name: 'Lebanon' },
   { code: 'YE', name: 'Yemen' },
-  { code: 'EG', name: 'Egypt' },
   { code: 'IL', name: 'Israel' },
   { code: 'PS', name: 'Palestine' },
   { code: 'SA', name: 'Saudi Arabia' },
