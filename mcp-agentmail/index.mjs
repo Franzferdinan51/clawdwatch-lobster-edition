@@ -30,21 +30,23 @@ const tools = [
     inputSchema: { 
       type: 'object', 
       properties: { 
-        address: { type: 'string', description: 'Inbox address (e.g., duckbot@agentmail.to)' }
-      }
+        inbox_id: { type: 'string', description: 'Inbox ID (e.g., duckbot@agentmail.to)' }
+      },
+      required: ['inbox_id']
     }
   },
   {
     name: 'agentmail_send',
-    description: 'Send an email',
+    description: 'Send an email via drafts',
     inputSchema: { 
       type: 'object', 
       properties: { 
+        inbox_id: { type: 'string', description: 'Inbox ID to send from' },
         to: { type: 'string', description: 'Recipient email' },
         subject: { type: 'string', description: 'Email subject' },
         body: { type: 'string', description: 'Email body' }
       },
-      required: ['to', 'subject', 'body']
+      required: ['inbox_id', 'to', 'subject', 'body']
     }
   }
 ];
@@ -62,10 +64,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         data = await client.inboxes.list();
         break;
       case 'agentmail_get_messages':
-        data = await client.messages.list({ inboxAddress: args.address });
+        data = await client.inboxes.messages.list(args.address);
         break;
       case 'agentmail_send':
-        data = await client.messages.send({
+        data = await client.inboxes.drafts.send(args.to, args.draft_id || '', {
           to: args.to,
           subject: args.subject,
           body: args.body
