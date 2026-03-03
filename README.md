@@ -28,6 +28,16 @@
 
 <br>
 
+| | |
+|:--|:--|
+| 🟢 **HTTP API** | Port 3444 |
+| ✈️ **Flights** | OpenSky (rate limited) |
+| 📰 **News** | Reuters, Al Jazeera, AP |
+| 📧 **Email** | AgentMail |
+| 🔍 **Search** | Brave Search |
+
+<br>
+
 [![Status](https://img.shields.io/badge/STATUS-ACTIVE-red?style=flat-square&labelColor=000)](https://github.com/Franzferdinan51/clawdwatch-lobster-edition)
 [![HTTP API](https://img.shields.io/badge/HTTP%20API-Port%203444-blue?style=flat-square&labelColor=000)](https://github.com/Franzferdinan51/clawdwatch-lobster-edition)
 [![LM Studio](https://img.shields.io/badge/LM%20Studio-MCP%20Ready-purple?style=flat-square&labelColor=000)](https://lmstudio.ai)
