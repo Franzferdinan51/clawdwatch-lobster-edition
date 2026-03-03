@@ -12,13 +12,13 @@ const OPENSKY_AUTH_HEADER = OPENSKY_API_KEY ? { 'Authorization': OPENSKY_API_KEY
 
 // Rate limiting state
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 10000; // 10 seconds between requests (OpenSky free tier limit)
+const MIN_REQUEST_INTERVAL = 30000; // 30 seconds between requests (OpenSky free tier)
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 30000; // 30 seconds wait on rate limit
 
 // Simple cache for API responses
 const cache: { [key: string]: { data: any; timestamp: number } } = {};
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache (respects 400 credits/day limit)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fetchWithRateLimit = async (url: string, useCache = true): Promise<any> => {
