@@ -52,7 +52,7 @@ const tools = [
   },
   {
     name: 'clawdwatch_conflict',
-    description: 'Get conflict zone data (11 regions)',
+    description: 'Get conflict zone summary data (cached)',
     inputSchema: { type: 'object', properties: {} }
   },
   {
@@ -73,25 +73,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     
     switch (name) {
       case 'clawdwatch_status':
-        data = await fetch(`${baseUrl}/status`).then(r => r.json());
+        data = await fetch(`${baseUrl}/status`, { signal: AbortSignal.timeout(5000) }).then(r => r.json());
         break;
       case 'clawdwatch_flights':
       case 'clawdwatch_flight':
         data = args.region 
-          ? await fetch(`${baseUrl}/flights/${args.region}`).then(r => r.json())
-          : await fetch(`${baseUrl}/flights`).then(r => r.json());
+          ? await fetch(`${baseUrl}/flights/${args.region}`, { signal: AbortSignal.timeout(5000) }).then(r => r.json())
+          : await fetch(`${baseUrl}/flights`, { signal: AbortSignal.timeout(5000) }).then(r => r.json());
         break;
       case 'clawdwatch_osint':
-        data = await fetch(`${baseUrl}/osint`).then(r => r.json());
+        data = await fetch(`${baseUrl}/osint`, { signal: AbortSignal.timeout(5000) }).then(r => r.json());
         break;
       case 'clawdwatch_news':
-        data = await fetch(`${baseUrl}/news`).then(r => r.json());
+        data = await fetch(`${baseUrl}/news`, { signal: AbortSignal.timeout(5000) }).then(r => r.json());
         break;
       case 'clawdwatch_conflict':
-        data = await fetch(`${baseUrl}/conflict`).then(r => r.json());
+        data = await fetch(`${baseUrl}/conflict`, { signal: AbortSignal.timeout(5000) }).then(r => r.json());
         break;
       case 'clawdwatch_regions':
-        data = await fetch(`${baseUrl}/regions`).then(r => r.json());
+        data = await fetch(`${baseUrl}/regions`, { signal: AbortSignal.timeout(5000) }).then(r => r.json());
         break;
       default:
         return { content: [{ type: 'text', text: 'Unknown tool' }] };
