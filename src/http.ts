@@ -6,8 +6,8 @@ import * as cheerio from 'cheerio';
 const app = express();
 const PORT = 3444;
 
-// OpenSky API configuration
-const OPENSKY_API_KEY = process.env.OPENSKY_API_KEY || ''; // Get free key at https://opensky-network.org/api/#registration
+// OpenSky API configuration - No API key needed for free tier
+const OPENSKY_API_KEY = ''; // Free tier doesn't require key, but you can add one if needed
 const OPENSKY_AUTH_HEADER = OPENSKY_API_KEY ? { 'Authorization': OPENSKY_API_KEY } : {};
 
 // Rate limiting state
@@ -402,6 +402,31 @@ app.get('/snapshot', async (req, res) => {
     },
     summary: `Middle East: ${osint.total || 0} flights`
   });
+});
+
+// AgentMail configuration
+const { AgentMailClient } = require('agentmail');
+const AGENTMAIL_API_KEY = process.env.AGENTMAIL_API_KEY || '';
+const agentMailClient = new AgentMailClient({ apiKey: AGENTMAIL_API_KEY });
+
+// AgentMail endpoints
+app.get('/email/inboxes', async (req, res) => {
+  try {
+    const inboxes = await agentMailClient.inboxes.list();
+    res.json({ success: true, inboxes });
+  } catch (e: any) {
+    res.json({ error: e.message });
+  }
+});
+
+app.get('/email/inbox/:address', async (req, res) => {
+  try {
+    const address = req.params.address;
+    const messages = await agentMailClient.messages.list({ inboxAddress: address });
+    res.json({ success: true, address, messages });
+  } catch (e: any) {
+    res.json({ error: e.message });
+  }
 });
 
 app.listen(PORT, () => {
