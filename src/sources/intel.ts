@@ -121,30 +121,6 @@ export async function fetchUsWeatherAlerts(): Promise<WeatherAlert[]> {
 }
 
 /**
- * NOAA Space Weather — recent geomagnetic storms / solar flares.
- * Free, public, XML feed.
- */
-export interface SpaceWeatherEvent {
-  product_id: string;
-  issue_time: string;
-  message: string;
-  kind: 'ALERT' | 'WARNING' | 'WATCH' | 'SUMMARY';
-}
-
-export async function fetchSpaceWeather(): Promise<SpaceWeatherEvent[]> {
-  const data = await cached('noaa_space_weather', async () => {
-    // Get the most recent 20 products
-    const res = await axios.get('https://services.swpc.noaa.gov/products/noaa-scales.json', {
-      timeout: 12_000,
-      headers: { 'User-Agent': 'ClawdWatch-Lobster/1.0' },
-    });
-    return res.data;
-  }, 30 * 60 * 1000);
-  if (!data) return [];
-  return []; // product listing; full message would need a second call. We just surface scale.
-}
-
-/**
  * Open-Meteo: global current weather, no key needed.
  * Used for "current conditions at point" lookups.
  */
@@ -203,3 +179,62 @@ export async function fetchGdacsEvents(): Promise<GdacsEvent[]> {
   if (!data) return [];
   return (data.features || data.events || []) as GdacsEvent[];
 }
+
+/**
+ * DEFCON level from defconlevel.com. The site's "current level" page has a
+ * clear <h1> followed by a hero block with the current level in <strong>.
+ * We parse the first integer in that hero block.
+ *
+ * DEFCON scale: 5 (lowest tension) ... 1 (highest tension, imminent war).
+ * The "current" is the editor's reading, not an official US military status.
+ */
+export interface DefconStatus {
+  level: 1 | 2 | 3 | 4 | 5;
+  description: string;
+  source: string;
+  url: string;
+  fetchedAt: string;
+}
+
+const DEFCON_DESCRIPTIONS: Record<1|2|3|4|5, string> = {
+  5: 'DEFCON 5 — Normal peacetime readiness',
+  4: 'DEFCON 4 — Above normal readiness, increased intel watch',
+  3: 'DEFCON 3 — Air Force ready to mobilize in 15 minutes',
+  2: 'DEFCON 2 — Next step to nuclear war, armed forces ready',
+  1: 'DEFCON 1 — Maximum readiness, nuclear war imminent or in progress',
+};
+
+export async function fetchDefconLevel(): Promise<DefconStatus | null> {
+  return cached<DefconStatus>('defconlevel_current', async () => {
+    const res = await axios.get('https://www.defconlevel.com/current-level', {
+      timeout: 15_000,
+      headers: { 'User-Agent': 'ClawdWatch-Lobster/1.0' },
+      validateStatus: () => true,
+    });
+    if (res.status >= 400) {
+      throw new Error(`defconlevel.com HTTP ${res.status}`);
+    }
+    const html: string = res.data;
+    // Primary pattern: <h1>Current DEFCON Level...</h1> ... <p class="hero-lead"><strong>DEFCON N
+    const heroMatch = html.match(/<h1[^>]*>Current DEFCON Level[^<]*<\/h1>[\s\S]{0,3000}?<strong>\s*DEFCON\s*([1-5])/i);
+    let level: 1|2|3|4|5 | null = null;
+    if (heroMatch) {
+      level = parseInt(heroMatch[1], 10) as 1|2|3|4|5;
+    } else {
+      // Fallback: first DEFCON N in body
+      const fallback = html.match(/DEFCON\s*([1-5])/);
+      if (fallback) level = parseInt(fallback[1], 10) as 1|2|3|4|5;
+    }
+    if (!level) {
+      throw new Error('defconlevel.com: could not parse current level');
+    }
+    return {
+      level,
+      description: DEFCON_DESCRIPTIONS[level],
+      source: 'defconlevel.com',
+      url: 'https://www.defconlevel.com/current-level',
+      fetchedAt: new Date().toISOString(),
+    };
+  }, 15 * 60 * 1000);
+}
+

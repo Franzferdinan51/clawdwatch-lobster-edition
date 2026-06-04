@@ -2,7 +2,7 @@ import express from 'express';
 import axios from 'axios';
 import { ALL_REGIONS, getDefaultFlightRegions, getRegionById, findRegion, type RegionDefinition } from './regions';
 import { RSS_FEEDS, fetchFeed, fetchFeeds, getFeedHealth, type NewsItem, type RssFeed, type FeedHealth } from './sources/rss';
-import { fetchEarthquakes, fetchUsWeatherAlerts, fetchCurrentWeather, fetchGdacsEvents } from './sources/intel';
+import { fetchEarthquakes, fetchUsWeatherAlerts, fetchCurrentWeather, fetchGdacsEvents, fetchDefconLevel } from './sources/intel';
 
 const app = express();
 const PORT = 3444;
@@ -127,8 +127,8 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({
     service: 'clawdwatch-lobster-edition',
-    version: '2.0.0-lobster',
-    description: 'Global OSINT aggregator — flights, news, disasters, weather alerts',
+    version: '2.1.0-lobster',
+    description: 'Global OSINT aggregator — flights, news, disasters, weather, DEFCON level',
     endpoints: {
       status:       'GET /status',
       regions:      'GET /regions',
@@ -143,6 +143,7 @@ app.get('/', (req, res) => {
       gdacs:        'GET /gdacs                 (global disaster alerts)',
       weatherAlerts:'GET /weather/us            (NWS active US alerts)',
       weather:      'GET /weather?lat=&lon=     (current wx from Open-Meteo)',
+      defcon:       'GET /defcon                (current DEFCON level from defconlevel.com)',
       conflict:     'GET /conflict              (ME-focused legacy summary)',
       osint:        'GET /osint                 (global situational summary)',
       snapshot:     'GET /snapshot              (one-call daily brief)',
@@ -155,7 +156,7 @@ app.get('/status', (req, res) => {
     status: 'running',
     service: 'clawdwatch-lobster-edition',
     port: PORT,
-    version: '2.0.0-lobster',
+    version: '2.1.0-lobster',
     regions: ALL_REGIONS.length,
     newsFeeds: RSS_FEEDS.filter((f) => f.enabled).length,
     cacheActive: true,
@@ -334,6 +335,15 @@ app.get('/weather', async (req, res) => {
   });
 });
 
+// === DEFCON ===
+app.get('/defcon', async (req, res) => {
+  const status = await fetchDefconLevel();
+  if (!status) {
+    return res.status(502).json({ error: 'DEFCON source unavailable' });
+  }
+  res.json(status);
+});
+
 // === AGGREGATES ===
 app.get('/conflict', async (req, res) => {
   // Legacy ME-focused endpoint, kept for backward compat with the evening brief.
@@ -363,11 +373,12 @@ app.get('/conflict', async (req, res) => {
 
 app.get('/osint', async (req, res) => {
   // Global situational summary. This is the one for the daily brief.
-  const [flightSummary, quakes, gdacs, usWeather] = await Promise.all([
+  const [flightSummary, quakes, gdacs, usWeather, defcon] = await Promise.all([
     getFlightSummary(getDefaultFlightRegions()),
     fetchEarthquakes(4.5),
     fetchGdacsEvents(),
     fetchUsWeatherAlerts(),
+    fetchDefconLevel(),
   ]);
 
   // Pull top news from global RSS feeds (priority weight 1-2)
@@ -382,6 +393,8 @@ app.get('/osint', async (req, res) => {
   res.json({
     timestamp: new Date().toISOString(),
     summary: {
+      defcon: defcon?.level ?? null,
+      defconDescription: defcon?.description ?? null,
       flights: flightSummary.totalFlights,
       regionsTracked: flightSummary.regionsQueried,
       earthquakes45: quakes.length,
@@ -389,6 +402,7 @@ app.get('/osint', async (req, res) => {
       usWeatherAlerts: usWeather.length,
       newsHeadlines: dedupedNews.length,
     },
+    defcon,
     flights: flightSummary,
     earthquakes: quakes.slice(0, 10),
     disasters: gdacs.slice(0, 10),
@@ -399,9 +413,10 @@ app.get('/osint', async (req, res) => {
 
 app.get('/snapshot', async (req, res) => {
   // One-call daily brief. Cheap version of /osint.
-  const [flightSummary, quakes] = await Promise.all([
+  const [flightSummary, quakes, defcon] = await Promise.all([
     getFlightSummary(getDefaultFlightRegions()),
     fetchEarthquakes(5.0),
+    fetchDefconLevel(),
   ]);
   const topFeeds = RSS_FEEDS.filter((f) => f.enabled && f.weight <= 2);
   const topNews = await fetchFeeds(topFeeds);
@@ -413,7 +428,8 @@ app.get('/snapshot', async (req, res) => {
 
   res.json({
     timestamp: new Date().toISOString(),
-    version: '2.0.0-lobster',
+    version: '2.1.0-lobster',
+    defcon,
     flights: {
       total: flightSummary.totalFlights,
       byRegion: flightSummary.regions.map((r) => ({ name: r.name, flights: r.flights })),
@@ -424,7 +440,8 @@ app.get('/snapshot', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`ClawdWatch Lobster Edition v2.0 running on port ${PORT}`);
+  console.log(`ClawdWatch Lobster Edition v2.1 running on port ${PORT}`);
   console.log(`  regions:  ${ALL_REGIONS.length}`);
   console.log(`  rss:      ${RSS_FEEDS.filter((f) => f.enabled).length} feeds enabled`);
+  console.log(`  defcon:   GET /defcon for current DEFCON level`);
 });

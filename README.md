@@ -18,7 +18,7 @@
 
 <br>
 
-### 🦀 CLAWDWATCH LOBSTER EDITION — v2.0
+### 🦀 CLAWDWATCH LOBSTER EDITION — v2.1
 
 *"See what they don't want you to see — everywhere on Earth"*
 
@@ -94,13 +94,14 @@ npm run start    # HTTP API on http://localhost:3444
 | `GET /news/sources` | List all configured feeds |
 | `GET /news/health` | Per-source OK/error status |
 
-### Intel (earthquakes, weather, disasters)
+### Intel (earthquakes, weather, disasters, DEFCON)
 | Endpoint | Description |
 |----------|-------------|
 | `GET /earthquakes?min=4.0` | USGS M2.5+ last 24h, min magnitude filter |
 | `GET /gdacs` | Global Disaster Alert and Coordination System events |
 | `GET /weather/us` | NOAA NWS active US alerts |
 | `GET /weather?lat=&lon=` | Current weather from Open-Meteo |
+| `GET /defcon` | Current DEFCON level (defconlevel.com, 15-min cache) |
 
 ### Aggregates
 | Endpoint | Description |
