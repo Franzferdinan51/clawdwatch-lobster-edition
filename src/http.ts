@@ -1,210 +1,117 @@
 import express from 'express';
-import https from 'https';
 import axios from 'axios';
-import * as cheerio from 'cheerio';
+import { ALL_REGIONS, getDefaultFlightRegions, getRegionById, findRegion, type RegionDefinition } from './regions';
+import { RSS_FEEDS, fetchFeed, fetchFeeds, getFeedHealth, type NewsItem, type RssFeed, type FeedHealth } from './sources/rss';
+import { fetchEarthquakes, fetchUsWeatherAlerts, fetchCurrentWeather, fetchGdacsEvents } from './sources/intel';
 
 const app = express();
 const PORT = 3444;
 
-// OpenSky API configuration - No API key needed for free tier
-const OPENSKY_API_KEY = ''; // Free tier doesn't require key, but you can add one if needed
-const OPENSKY_AUTH_HEADER = OPENSKY_API_KEY ? { 'Authorization': OPENSKY_API_KEY } : {};
+// ============================================================
+// OpenSky rate limiting + cache
+// ============================================================
+const OPENSKY_BASE = 'https://opensky-network.org/api/states/all';
+const OPENSKY_KEY = process.env.OPENSKY_API_KEY || '';
+const OPENSKY_AUTH_HEADER = OPENSKY_KEY ? { 'Authorization': `Bearer ${OPENSKY_KEY}` } : {};
 
-// Rate limiting state
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 30000; // 30 seconds between requests (OpenSky free tier)
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 30000; // 30 seconds wait on rate limit
+const MIN_REQUEST_INTERVAL = 10_000;   // 10s — strict enough to be polite
+const MAX_RETRIES = 2;
+const RETRY_DELAY = 15_000;
 
-// Simple cache for API responses
 const cache: { [key: string]: { data: any; timestamp: number } } = {};
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache (respects 400 credits/day limit)
+const CACHE_TTL = 5 * 60 * 1000;       // 5 min for flight data
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fetchWithRateLimit = async (url: string, useCache = true): Promise<any> => {
+async function fetchOpenSky(url: string, useCache = true): Promise<any> {
   const cacheKey = url;
-  
-  // Check cache first
+
   if (useCache && cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < CACHE_TTL) {
     return cache[cacheKey].data;
   }
-  
-  // Rate limiting - wait between requests
+
+  // rate limit
   const now = Date.now();
-  const timeSinceLastRequest = now - lastRequestTime;
-  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-    const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
-    console.log(`Rate limiting: waiting ${waitTime}ms before request`);
-    await new Promise(resolve => setTimeout(resolve, waitTime));
-  }
-  
+  const wait = MIN_REQUEST_INTERVAL - (now - lastRequestTime);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastRequestTime = Date.now();
-  
-  // Make request with retry logic
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const response = await axios.get(url, {
-        headers: {
-          ...OPENSKY_AUTH_HEADER,
-          'User-Agent': 'Clawdwatch-Lobster-Edition/1.0'
-        },
-        timeout: 15000
+        headers: { ...OPENSKY_AUTH_HEADER, 'User-Agent': 'ClawdWatch-Lobster/1.0' },
+        timeout: 15_000,
+        validateStatus: () => true,
       });
-      
-      // Check for rate limit response
-      if (response.status === 429 || response.data?.message === 'Too many requests') {
-        console.log(`Rate limited by OpenSky, attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${RETRY_DELAY}ms`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-        lastRequestTime = Date.now(); // Reset after rate limit
+
+      if (response.status === 429) {
+        console.warn(`[opensky] rate limited, retrying in ${RETRY_DELAY}ms`);
+        await new Promise((r) => setTimeout(r, RETRY_DELAY));
         continue;
       }
-      
-      // Cache successful response
-      if (response.data && Object.keys(response.data).length > 0) {
+
+      if (response.status >= 400) {
+        return { error: `OpenSky HTTP ${response.status}`, states: [] };
+      }
+
+      if (response.data?.states) {
         cache[cacheKey] = { data: response.data, timestamp: Date.now() };
+        return response.data;
       }
-      return response.data;
-      
-    } catch (error: any) {
-      if (error.response?.status === 429 || error.message.includes('429')) {
-        console.log(`Rate limited (error), attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${RETRY_DELAY}ms`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-        lastRequestTime = Date.now();
-        continue;
+
+      return { states: [] };
+    } catch (e: any) {
+      if (attempt === MAX_RETRIES - 1) {
+        return { error: e.message, states: [] };
       }
-      throw error;
     }
   }
-  
-  return { error: 'Max retries exceeded', message: 'OpenSky rate limit - try again later or add API key' };
-};
-
-// Legacy function for compatibility
-const fetchJson = fetchWithRateLimit;
-
-// News types
-interface NewsItem {
-  title: string;
-  url: string;
-  source: string;
-  region: string;
-  timestamp: string;
+  return { error: 'OpenSky: max retries exceeded', states: [] };
 }
 
-// News scrapers
-async function fetchReuters(): Promise<NewsItem[]> {
-  try {
-    const response = await axios.get('https://www.reuters.com/world/middle-east/', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Clawdwatch/1.0)' },
-      timeout: 10000,
-    });
-    const $ = cheerio.load(response.data);
-    const items: NewsItem[] = [];
-    $('article h3, [data-testid="Heading"] a').each((i, el) => {
-      const title = $(el).text().trim();
-      const link = $(el).attr('href') || $(el).find('a').attr('href');
-      if (title && title.length > 10) {
-        items.push({
-          title: title.slice(0, 120),
-          url: link?.startsWith('http') ? link : `https://www.reuters.com${link}`,
-          source: 'Reuters',
-          region: 'middle_east',
-          timestamp: new Date().toISOString(),
-        });
-      }
-    });
-    return items.slice(0, 10);
-  } catch (e: any) {
-    console.error('Reuters error:', e.message);
-    return [];
+// ============================================================
+// Flight region fetcher
+// ============================================================
+async function getFlightsForRegion(region: RegionDefinition) {
+  const { flightBounds, name, id } = region;
+  const url = `${OPENSKY_BASE}?lamin=${flightBounds.latMin}&lomin=${flightBounds.lonMin}&lamax=${flightBounds.latMax}&lomax=${flightBounds.lonMax}`;
+  const data = await fetchOpenSky(url);
+
+  if (data.error) {
+    return { regionId: id, region: name, total: 0, flights: [], error: data.error };
   }
+  return {
+    regionId: id,
+    region: name,
+    group: region.group,
+    total: data.states?.length || 0,
+    flights: (data.states || []).slice(0, 50),
+  };
 }
 
-async function fetchAlJazeera(): Promise<NewsItem[]> {
-  try {
-    const response = await axios.get('https://www.aljazeera.com/middle-east/', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Clawdwatch/1.0)' },
-      timeout: 10000,
-    });
-    const $ = cheerio.load(response.data);
-    const items: NewsItem[] = [];
-    $('article h3 a, .gc__title a').each((i, el) => {
-      const title = $(el).text().trim();
-      const link = $(el).attr('href');
-      if (title && title.length > 10) {
-        items.push({
-          title: title.slice(0, 120),
-          url: link?.startsWith('http') ? link : `https://www.aljazeera.com${link}`,
-          source: 'Al Jazeera',
-          region: 'middle_east',
-          timestamp: new Date().toISOString(),
-        });
-      }
-    });
-    return items.slice(0, 10);
-  } catch (e: any) {
-    console.error('Al Jazeera error:', e.message);
-    return [];
-  }
+// Aggregate flight counts across many regions. Designed to be cache-friendly.
+async function getFlightSummary(regions: RegionDefinition[]) {
+  const results = await Promise.all(regions.map(getFlightsForRegion));
+  const totalFlights = results.reduce((s, r) => s + (r.total || 0), 0);
+  const errors = results.filter((r) => r.error);
+  return {
+    timestamp: new Date().toISOString(),
+    source: 'OpenSky Network',
+    regionsQueried: regions.length,
+    totalFlights,
+    regions: results.map((r) => ({
+      id: r.regionId,
+      name: r.region,
+      group: (regions.find((reg) => reg.id === r.regionId))?.group,
+      flights: r.total,
+      error: r.error,
+    })),
+    degraded: errors.length > 0,
+  };
 }
 
-async function fetchAP(): Promise<NewsItem[]> {
-  try {
-    const response = await axios.get('https://apnews.com/hub/middle-east', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Clawdwatch/1.0)' },
-      timeout: 10000,
-    });
-    const $ = cheerio.load(response.data);
-    const items: NewsItem[] = [];
-    $('article h3 a, .headline a').each((i, el) => {
-      const title = $(el).text().trim();
-      const link = $(el).attr('href');
-      if (title && title.length > 10) {
-        items.push({
-          title: title.slice(0, 120),
-          url: link?.startsWith('http') ? link : `https://apnews.com${link}`,
-          source: 'AP News',
-          region: 'middle_east',
-          timestamp: new Date().toISOString(),
-        });
-      }
-    });
-    return items.slice(0, 10);
-  } catch (e: any) {
-    console.error('AP error:', e.message);
-    return [];
-  }
-}
-
-// Region definitions - Using upstream cloudweaver bounds
-const REGIONS: { [key: string]: { name: string; lat: number[]; lon: number[] } } = {
-  middle_east: { name: 'Middle East', lat: [12, 42], lon: [25, 65] },
-  europe: { name: 'Europe', lat: [35, 72], lon: [-10, 40] },
-  usa: { name: 'USA', lat: [24, 50], lon: [-125, -66] },
-  asia: { name: 'Asia', lat: [5, 55], lon: [70, 145] },
-  eastern_europe: { name: 'Eastern Europe', lat: [44, 70], lon: [15, 60] },
-  central_asia: { name: 'Central Asia', lat: [30, 55], lon: [50, 90] },
-  south_asia: { name: 'South Asia', lat: [5, 40], lon: [60, 100] },
-  east_asia: { name: 'East Asia', lat: [15, 50], lon: [100, 150] },
-  africa: { name: 'Africa', lat: [-35, 37], lon: [-20, 60] },
-  north_america: { name: 'North America', lat: [15, 75], lon: [-170, -50] },
-  south_america: { name: 'South America', lat: [-60, 15], lon: [-85, -30] },
-  oceania: { name: 'Oceania', lat: [-50, 0], lon: [110, 180] },
-  // Conflict regions - Using upstream bounds
-  iran: { name: 'Iran', lat: [12, 42], lon: [25, 65] },
-  israel: { name: 'Israel/Palestine', lat: [29, 34], lon: [34, 36] },
-  lebanon: { name: 'Lebanon', lat: [33, 35], lon: [35, 37] },
-  syria: { name: 'Syria', lat: [32, 42], lon: [35, 43] },
-  iraq: { name: 'Iraq', lat: [29, 38], lon: [38, 49] },
-  saudi_arabia: { name: 'Saudi Arabia', lat: [16, 33], lon: [34, 56] },
-  uae: { name: 'UAE', lat: [22, 27], lon: [51, 57] },
-  qatar: { name: 'Qatar', lat: [24, 27], lon: [50, 52] },
-  kuwait: { name: 'Kuwait', lat: [28, 31], lon: [46, 49] },
-  turkey: { name: 'Turkey', lat: [36, 42], lon: [26, 45] },
-  yemen: { name: 'Yemen', lat: [12, 20], lon: [42, 55] },
-};
-
-// CORS middleware
+// ============================================================
+// CORS
+// ============================================================
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -213,197 +120,311 @@ app.use((req, res, next) => {
   next();
 });
 
-// Fetch flights for a region
-async function getFlightsForRegion(region: string) {
-  const config = REGIONS[region];
-  if (!config) return { error: 'Unknown region: ' + region };
-  
-  const [lamin, lamax] = config.lat;
-  const [lomin, lomax] = config.lon;
-  const url = `https://opensky-network.org/api/states/all?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`;
-  
-  try {
-    const data = await fetchJson(url, true);
-    if (data.error || data.message === 'Too many requests') {
-      return { error: data.message || 'Rate limited', total: 0, flights: [] };
-    }
-    return {
-      region: config.name,
-      regionId: region,
-      total: data.states?.length || 0,
-      flights: data.states?.slice(0, 50) || []
-    };
-  } catch (e: any) {
-    return { error: e.message, total: 0, flights: [] };
-  }
-}
+// ============================================================
+// ROUTES
+// ============================================================
+
+app.get('/', (req, res) => {
+  res.json({
+    service: 'clawdwatch-lobster-edition',
+    version: '2.0.0-lobster',
+    description: 'Global OSINT aggregator — flights, news, disasters, weather alerts',
+    endpoints: {
+      status:       'GET /status',
+      regions:      'GET /regions',
+      flights:      'GET /flights               (priority regions)',
+      flightsRegion:'GET /flights/:region       (single region by id or alias)',
+      flightsAll:   'GET /flights/all           (every defined region, slower)',
+      news:         'GET /news                  (all enabled RSS feeds)',
+      newsRegion:   'GET /news/:region          (filter by region group)',
+      newsHealth:   'GET /news/health           (per-source health)',
+      newsSources:  'GET /news/sources          (configured RSS feeds)',
+      earthquakes:  'GET /earthquakes?min=4.0   (USGS, 2.5+ last 24h)',
+      gdacs:        'GET /gdacs                 (global disaster alerts)',
+      weatherAlerts:'GET /weather/us            (NWS active US alerts)',
+      weather:      'GET /weather?lat=&lon=     (current wx from Open-Meteo)',
+      conflict:     'GET /conflict              (ME-focused legacy summary)',
+      osint:        'GET /osint                 (global situational summary)',
+      snapshot:     'GET /snapshot              (one-call daily brief)',
+    },
+  });
+});
 
 app.get('/status', (req, res) => {
-  res.json({ 
-    status: 'running', 
-    service: 'clawdwatch-lobster-edition', 
-    port: PORT, 
-    version: '1.0.0-lobster',
-    regions: Object.keys(REGIONS).length,
+  res.json({
+    status: 'running',
+    service: 'clawdwatch-lobster-edition',
+    port: PORT,
+    version: '2.0.0-lobster',
+    regions: ALL_REGIONS.length,
+    newsFeeds: RSS_FEEDS.filter((f) => f.enabled).length,
     cacheActive: true,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
 app.get('/regions', (req, res) => {
-  res.json({ 
-    regions: Object.entries(REGIONS).map(([key, value]) => ({
-      id: key,
-      ...value
-    }))
+  res.json({
+    total: ALL_REGIONS.length,
+    regions: ALL_REGIONS.map((r) => ({
+      id: r.id,
+      name: r.name,
+      group: r.group,
+      description: r.description,
+      bounds: r.flightBounds,
+      aliases: r.aliases,
+      priority: r.priority,
+    })),
   });
 });
 
+// === FLIGHTS ===
 app.get('/flights', async (req, res) => {
-  const results = await Promise.all([
-    getFlightsForRegion('middle_east'),
-    getFlightsForRegion('europe'),
-    getFlightsForRegion('iran'),
-    getFlightsForRegion('israel'),
-  ]);
-  
-  const allFlights: any[] = [];
-  const regions: string[] = [];
-  
-  for (const r of results) {
-    if (r.error) continue;
-    allFlights.push(...(r.flights || []));
-    if (r.region) regions.push(r.region);
-  }
-  
-  res.json({ 
-    timestamp: new Date().toISOString(),
-    source: 'OpenSky Network',
-    regions: regions,
-    total: allFlights.length,
-    flights: allFlights.slice(0, 200)
+  const summary = await getFlightSummary(getDefaultFlightRegions());
+  res.json({
+    ...summary,
+    // Keep flights in default for backward compat
+    flights: summary.regions.flatMap((r) => []).slice(0, 0), // intentionally empty; use /flights/:region
+    note: 'This endpoint returns aggregate counts. For raw flight lists, call /flights/:region.',
   });
+});
+
+app.get('/flights/all', async (req, res) => {
+  const summary = await getFlightSummary(ALL_REGIONS);
+  res.json(summary);
 });
 
 app.get('/flights/:region', async (req, res) => {
-  const region = req.params.region.toLowerCase();
+  const region = findRegion(req.params.region);
+  if (!region) {
+    return res.status(404).json({ error: `Unknown region: ${req.params.region}. Try /regions.` });
+  }
   const result = await getFlightsForRegion(region);
   res.json({
     timestamp: new Date().toISOString(),
     source: 'OpenSky Network',
-    ...result
+    ...result,
   });
 });
 
-// NEWS ENDPOINT
-app.get('/news', async (req, res) => {
-  const [reuters, aljazeera, ap] = await Promise.all([
-    fetchReuters(),
-    fetchAlJazeera(),
-    fetchAP()
-  ]);
-  
-  const allNews = [...reuters, ...aljazeera, ...ap];
-  
+// === NEWS (RSS) ===
+// === NEWS (RSS) — specific routes BEFORE /news/:region ===
+app.get('/news/health', (req, res) => {
+  const health: FeedHealth[] = getFeedHealth();
   res.json({
     timestamp: new Date().toISOString(),
-    sources: ['Reuters', 'Al Jazeera', 'AP News'],
-    total: allNews.length,
-    news: allNews.slice(0, 30)
+    ok: health.filter((h) => h.ok).length,
+    failing: health.filter((h) => !h.ok).length,
+    feeds: health,
   });
 });
 
-// OSINT endpoint
-app.get('/osint', async (req, res) => {
-  const conflictRegions = ['iran', 'israel', 'lebanon', 'syria', 'iraq', 'yemen', 'saudi_arabia', 'uae', 'qatar', 'kuwait', 'turkey'];
-  const flightResults = await Promise.all(conflictRegions.map(r => getFlightsForRegion(r)));
-  
-  const [reuters, aljazeera, ap] = await Promise.all([
-    fetchReuters(),
-    fetchAlJazeera(),
-    fetchAP()
-  ]);
-  
-  const flightsByRegion = conflictRegions.map((region, i) => ({
-    region: REGIONS[region]?.name || region,
-    flights: flightResults[i].total || 0
-  }));
-  
-  const totalFlights = flightResults.reduce((sum, r) => sum + (r.total || 0), 0);
-  const allNews = [...reuters, ...aljazeera, ...ap];
-  
-  res.json({ 
+app.get('/news/sources', (req, res) => {
+  res.json({
     timestamp: new Date().toISOString(),
-    flights: {
-      total: totalFlights,
-      byRegion: flightsByRegion.filter(r => r.flights > 0)
-    },
-    news: {
-      total: allNews.length,
-      sources: ['Reuters', 'Al Jazeera', 'AP News'],
-      headlines: allNews.slice(0, 15)
-    },
-    summary: `Tracking ${totalFlights} flights across conflict zones, ${allNews.length} news headlines`
+    total: RSS_FEEDS.length,
+    enabled: RSS_FEEDS.filter((f) => f.enabled).length,
+    feeds: RSS_FEEDS.map((f) => ({
+      id: f.id,
+      name: f.name,
+      region: f.region,
+      feedUrl: f.feedUrl,
+      enabled: f.enabled,
+      weight: f.weight,
+    })),
   });
 });
 
-// CONFLICT endpoint
+app.get('/news', async (req, res) => {
+  const all = await fetchFeeds(RSS_FEEDS, true);
+  // Dedupe by URL
+  const seen = new Set<string>();
+  const deduped = all.filter((n) => {
+    if (seen.has(n.url)) return false;
+    seen.add(n.url);
+    return true;
+  });
+  // Newest first
+  deduped.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    sourcesCount: RSS_FEEDS.filter((f) => f.enabled).length,
+    total: deduped.length,
+    news: deduped.slice(0, 50),
+  });
+});
+
+app.get('/news/:region', async (req, res) => {
+  const regionParam = req.params.region.toLowerCase();
+  const matchingFeeds = RSS_FEEDS.filter(
+    (f) => f.region === regionParam || f.id === regionParam,
+  );
+  if (matchingFeeds.length === 0) {
+    return res.status(404).json({
+      error: `No RSS feeds for region "${regionParam}".`,
+      available: Array.from(new Set(RSS_FEEDS.map((f) => f.region))),
+    });
+  }
+  const all = await fetchFeeds(matchingFeeds, true);
+  const seen = new Set<string>();
+  const deduped = all.filter((n) => {
+    if (seen.has(n.url)) return false;
+    seen.add(n.url);
+    return true;
+  });
+  deduped.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  res.json({
+    timestamp: new Date().toISOString(),
+    region: regionParam,
+    sources: matchingFeeds.map((f) => f.name),
+    total: deduped.length,
+    news: deduped.slice(0, 30),
+  });
+});
+
+// === INTEL (Earthquakes, Disasters, Weather) ===
+app.get('/earthquakes', async (req, res) => {
+  const min = parseFloat((req.query.min as string) || '4.0');
+  const quakes = await fetchEarthquakes(min);
+  res.json({
+    timestamp: new Date().toISOString(),
+    source: 'USGS',
+    minMagnitude: min,
+    total: quakes.length,
+    earthquakes: quakes.slice(0, 50),
+  });
+});
+
+app.get('/gdacs', async (req, res) => {
+  const events = await fetchGdacsEvents();
+  res.json({
+    timestamp: new Date().toISOString(),
+    source: 'GDACS',
+    total: events.length,
+    events,
+  });
+});
+
+app.get('/weather/us', async (req, res) => {
+  const alerts = await fetchUsWeatherAlerts();
+  res.json({
+    timestamp: new Date().toISOString(),
+    source: 'NOAA NWS',
+    total: alerts.length,
+    alerts,
+  });
+});
+
+app.get('/weather', async (req, res) => {
+  const lat = parseFloat(req.query.lat as string);
+  const lon = parseFloat(req.query.lon as string);
+  if (Number.isNaN(lat) || Number.isNaN(lon)) {
+    return res.status(400).json({ error: 'Provide ?lat=<num>&lon=<num>' });
+  }
+  const current = await fetchCurrentWeather(lat, lon);
+  if (!current) {
+    return res.status(502).json({ error: 'Weather source unavailable' });
+  }
+  res.json({
+    timestamp: new Date().toISOString(),
+    source: 'Open-Meteo',
+    lat, lon,
+    current,
+  });
+});
+
+// === AGGREGATES ===
 app.get('/conflict', async (req, res) => {
-  const conflictRegions = ['iran', 'israel', 'lebanon', 'syria', 'iraq', 'yemen', 'saudi_arabia', 'uae', 'qatar', 'kuwait', 'turkey'];
-  
-  const flightResults = await Promise.all(conflictRegions.map(r => getFlightsForRegion(r)));
-  
-  const [reuters, aljazeera, ap] = await Promise.all([
-    fetchReuters(),
-    fetchAlJazeera(),
-    fetchAP()
-  ]);
-  
-  const conflictZones = conflictRegions.map((region, i) => ({
-    region: REGIONS[region]?.name || region,
-    regionId: region,
-    flights: flightResults[i].total || 0
-  }));
-  
-  const totalConflictFlights = flightResults.reduce((sum, r) => sum + (r.total || 0), 0);
-  const allNews = [...reuters, ...aljazeera, ...ap];
-  
-  res.json({ 
+  // Legacy ME-focused endpoint, kept for backward compat with the evening brief.
+  const meRegionIds = ['iran', 'israel', 'lebanon', 'syria', 'iraq', 'yemen', 'saudi_arabia', 'uae', 'qatar', 'kuwait', 'turkey'];
+  const conflictRegions = meRegionIds
+    .map((id) => getRegionById(id))
+    .filter((r): r is RegionDefinition => !!r);
+
+  const flightResults = await Promise.all(conflictRegions.map(getFlightsForRegion));
+  const newsFeeds = RSS_FEEDS.filter((f) => f.region === 'middle_east' || f.region === 'israel' || f.region === 'eastern_europe');
+  const news = await fetchFeeds(newsFeeds);
+  const seen = new Set<string>();
+  const dedupedNews = news.filter((n) => {
+    if (seen.has(n.url)) return false;
+    seen.add(n.url);
+    return true;
+  });
+
+  res.json({
     timestamp: new Date().toISOString(),
-    source: 'OpenSky Network + News Scrapers',
-    conflictZones,
-    totalConflictFlights,
-    news: {
-      total: allNews.length,
-      sources: ['Reuters', 'Al Jazeera', 'AP News'],
-      latest: allNews.slice(0, 10)
-    },
-    summary: `${totalConflictFlights} flights across ${conflictZones.length} conflict zones, ${allNews.length} news items`
+    source: 'OpenSky + RSS',
+    conflictZones: flightResults.map((r) => ({ id: r.regionId, name: r.region, flights: r.total })),
+    totalConflictFlights: flightResults.reduce((s, r) => s + (r.total || 0), 0),
+    news: { total: dedupedNews.length, sources: newsFeeds.map((f) => f.name), latest: dedupedNews.slice(0, 10) },
   });
 });
 
-app.get('/ships', (req, res) => {
-  res.json({ message: 'Ship tracking requires AIS API key configuration' });
+app.get('/osint', async (req, res) => {
+  // Global situational summary. This is the one for the daily brief.
+  const [flightSummary, quakes, gdacs, usWeather] = await Promise.all([
+    getFlightSummary(getDefaultFlightRegions()),
+    fetchEarthquakes(4.5),
+    fetchGdacsEvents(),
+    fetchUsWeatherAlerts(),
+  ]);
+
+  // Pull top news from global RSS feeds (priority weight 1-2)
+  const topFeeds = RSS_FEEDS.filter((f) => f.enabled && f.weight <= 2);
+  const topNews = await fetchFeeds(topFeeds);
+  const seen = new Set<string>();
+  const dedupedNews = topNews
+    .filter((n) => { if (seen.has(n.url)) return false; seen.add(n.url); return true; })
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 20);
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    summary: {
+      flights: flightSummary.totalFlights,
+      regionsTracked: flightSummary.regionsQueried,
+      earthquakes45: quakes.length,
+      gdacsEvents: gdacs.length,
+      usWeatherAlerts: usWeather.length,
+      newsHeadlines: dedupedNews.length,
+    },
+    flights: flightSummary,
+    earthquakes: quakes.slice(0, 10),
+    disasters: gdacs.slice(0, 10),
+    weather: usWeather.slice(0, 10),
+    news: dedupedNews,
+  });
 });
 
 app.get('/snapshot', async (req, res) => {
-  const osint = await getFlightsForRegion('middle_east');
-  const news = await Promise.all([fetchReuters(), fetchAlJazeera(), fetchAP()]);
-  
+  // One-call daily brief. Cheap version of /osint.
+  const [flightSummary, quakes] = await Promise.all([
+    getFlightSummary(getDefaultFlightRegions()),
+    fetchEarthquakes(5.0),
+  ]);
+  const topFeeds = RSS_FEEDS.filter((f) => f.enabled && f.weight <= 2);
+  const topNews = await fetchFeeds(topFeeds);
+  const seen = new Set<string>();
+  const dedupedNews = topNews
+    .filter((n) => { if (seen.has(n.url)) return false; seen.add(n.url); return true; })
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 8);
+
   res.json({
     timestamp: new Date().toISOString(),
-    version: '1.0.0-lobster',
+    version: '2.0.0-lobster',
     flights: {
-      middle_east: osint.total || 0
+      total: flightSummary.totalFlights,
+      byRegion: flightSummary.regions.map((r) => ({ name: r.name, flights: r.flights })),
     },
-    news: {
-      total: news.reduce((sum, n) => sum + n.length, 0),
-      sources: ['Reuters', 'Al Jazeera', 'AP News']
-    },
-    summary: `Middle East: ${osint.total || 0} flights`
+    earthquakes: { total: quakes.length, top: quakes.slice(0, 3) },
+    news: { total: dedupedNews.length, top: dedupedNews },
   });
 });
 
 app.listen(PORT, () => {
-  console.log('Clawdwatch HTTP API running on port ' + PORT + ' with caching enabled');
+  console.log(`ClawdWatch Lobster Edition v2.0 running on port ${PORT}`);
+  console.log(`  regions:  ${ALL_REGIONS.length}`);
+  console.log(`  rss:      ${RSS_FEEDS.filter((f) => f.enabled).length} feeds enabled`);
 });
