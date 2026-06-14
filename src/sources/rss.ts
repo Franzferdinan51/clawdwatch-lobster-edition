@@ -65,6 +65,7 @@ export const RSS_FEEDS: RssFeed[] = [
 
   // === Tech / OSINT-adjacent ===
   { id: 'reuters_tech', name: 'Reuters Tech (via Google News)', region: 'tech', feedUrl: 'https://news.google.com/rss/search?q=reuters+technology&hl=en-US&gl=US&ceid=US:en', homepageUrl: 'https://www.reuters.com/technology', enabled: true, weight: 6 },
+  { id: 'hn', name: 'Hacker News', region: 'tech', feedUrl: 'https://news.ycombinator.com/rss', homepageUrl: 'https://news.ycombinator.com', enabled: true, weight: 3 },
 ];
 
 const feedCache: Map<string, { data: NewsItem[]; timestamp: number }> = new Map();
