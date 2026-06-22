@@ -53,7 +53,13 @@ const ENDPOINTS = [
   ['/cve/CVE-2021-44228', 15],                            // works (NVD, no key) — Log4Shell
   ['/cve/recent?days=7', 30],                              // works (NVD, no key)
   ['/telegram/durov?limit=3', 15],                         // works (t.me scraping, no key)
-  // needs API key — gracefully 401s without one
+  ['/space-weather', 15],                                  // works (NOAA SWPC, no key)
+  ['/sentinel?lat=39.7589&lng=-84.1916&radius=2&days=30', 20],  // works (Element84 STAC, no key)
+  ['/satellites?category=stations&limit=3', 20],            // works (Celestrak, no key)
+  ['/cyber-threats?days=60', 30],                          // works (CISA KEV, no key)
+  ['/geo?ip=8.8.8.8', 15],                                 // works (3-provider cascade, no key)
+  ['/air-quality', 30],                                    // works (Open-Meteo, no key)
+  // needs API key — gracefully 404s without one
   ['/sanctions?q=Putin', 15],                              // needs OPENSANCTIONS_API_KEY
   ['/fires?hours=24', 30],                                 // needs FIRMS_MAP_KEY
 ];

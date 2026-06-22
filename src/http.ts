@@ -16,6 +16,12 @@ import {
   whoisLookup,
   dnsLookup,
   fetchTelegramChannel,
+  fetchSpaceWeather,
+  searchSentinelScenes,
+  fetchSatelliteCatalog,
+  fetchCyberThreats,
+  geoLocate,
+  fetchAirQuality,
 } from './sources/osiris';
 
 const app = express();
@@ -171,6 +177,12 @@ app.get('/', (req, res) => {
       whois:        'GET /whois/:domain          (RDAP lookup, free, no key)',
       dns:          'GET /dns/:domain            (A, AAAA, MX, TXT, NS, CNAME via Google DoH)',
       telegram:     'GET /telegram/:channel      (public channel recent messages)',
+      spaceWeather: 'GET /space-weather          (NOAA SWPC Kp index + solar flares, free, no key)',
+      sentinel:     'GET /sentinel?lat=&lng=     (Sentinel-1/2 satellite imagery search, free)',
+      satellites:   'GET /satellites?category=   (Celestrak TLE catalog, free)',
+      cyberThreats: 'GET /cyber-threats?days=    (CISA Known Exploited Vulnerabilities, free)',
+      geo:          'GET /geo?ip=                (IP geolocation, 3-provider cascade)',
+      airQuality:   'GET /air-quality?limit=     (OpenAQ global PM2.5 stations, free)',
     },
   });
 });
@@ -576,10 +588,82 @@ app.get('/telegram/:channel', async (req, res) => {
   });
 });
 
+// GET /space-weather — NOAA SWPC Kp index, solar flares, alerts
+// (FREE — no API key required)
+app.get('/space-weather', async (_req, res) => {
+  const data = await fetchSpaceWeather();
+  if (!data) return res.status(503).json({ error: 'Space weather feed unavailable' });
+  res.json(data);
+});
+
+// GET /sentinel — Sentinel-1/2 satellite imagery search
+// Query: ?lat=&lng=&radius=&days=&platform=sentinel-2-l2a|sentinel-1-grd
+app.get('/sentinel', async (req, res) => {
+  const lat = parseFloat(String(req.query.lat ?? ''));
+  const lng = parseFloat(String(req.query.lng ?? ''));
+  if (isNaN(lat) || isNaN(lng)) {
+    return res.status(400).json({ error: 'lat and lng query params required' });
+  }
+  const radius = parseFloat(String(req.query.radius ?? '2'));
+  const days = parseInt(String(req.query.days ?? '30'), 10);
+  const platform = (String(req.query.platform ?? 'sentinel-2-l2a')) as 'sentinel-1-grd' | 'sentinel-2-l2a';
+  const scenes = await searchSentinelScenes(lat, lng, radius, days, platform);
+  res.json({
+    query: { lat, lng, radius, days, platform },
+    count: scenes.length,
+    scenes,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// GET /satellites — TLE catalog from Celestrak
+// Query: ?category=stations|weather|starlink|amateur|gps-ops|...&limit=50
+app.get('/satellites', async (req, res) => {
+  const category = String(req.query.category ?? 'stations');
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 200);
+  const sats = await fetchSatelliteCatalog(category, limit);
+  res.json({
+    category,
+    count: sats.length,
+    satellites: sats,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// GET /cyber-threats — CISA Known Exploited Vulnerabilities
+// Query: ?days=30
+app.get('/cyber-threats', async (req, res) => {
+  const days = Math.min(Math.max(parseInt(String(req.query.days ?? '30'), 10) || 30, 1), 365);
+  const data = await fetchCyberThreats(days);
+  if (!data) return res.status(503).json({ error: 'Cyber threat feed unavailable' });
+  res.json(data);
+});
+
+// GET /geo — IP geolocation (3-provider cascade)
+// Query: ?ip=8.8.8.8 (omit for caller IP)
+app.get('/geo', async (req, res) => {
+  const ip = String(req.query.ip ?? '');
+  const data = await geoLocate(ip);
+  if (!data) return res.status(503).json({ error: 'Geolocation lookup failed across all providers' });
+  res.json(data);
+});
+
+// GET /air-quality — Open-Meteo current AQI for 22 major global cities
+// (FREE — no API key required)
+app.get('/air-quality', async (_req, res) => {
+  const stations = await fetchAirQuality();
+  res.json({
+    count: stations.length,
+    cities_with_poor_air: stations.filter(s => (s.us_aqi ?? 0) > 100).length,
+    stations,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.listen(PORT, () => {
-  console.log(`ClawdWatch Lobster Edition v2.2 running on port ${PORT}`);
+  console.log(`ClawdWatch Lobster Edition v2.3 running on port ${PORT}`);
   console.log(`  regions:  ${ALL_REGIONS.length}`);
   console.log(`  rss:      ${RSS_FEEDS.filter((f) => f.enabled).length} feeds enabled`);
   console.log(`  defcon:   GET /defcon for current DEFCON level`);
-  console.log(`  osiris:   GET /sanctions /crypto/* /fires /cve/* /whois/* /dns/* /telegram/*`);
+  console.log(`  osiris:   /sanctions /crypto/* /fires /cve/* /whois/* /dns/* /telegram/* /space-weather /sentinel /satellites /cyber-threats /geo /air-quality`);
 });
