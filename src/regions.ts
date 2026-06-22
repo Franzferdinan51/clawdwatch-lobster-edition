@@ -66,6 +66,10 @@ const SUBREGIONS: RegionDefinition[] = [
   { id: 'british_isles',  name: 'British Isles',  description: 'UK + Ireland.',                                flightBounds: { latMin: 49, latMax: 61, lonMin: -11, lonMax: 2 },  group: 'europe', aliases: ['uk', 'britain'], priority: 3 },
   { id: 'mediterranean',  name: 'Mediterranean',  description: 'Med Sea coast + North Africa rim.',            flightBounds: { latMin: 30, latMax: 47, lonMin: -10, lonMax: 38 }, group: 'europe', aliases: ['med'], priority: 3 },
   { id: 'scandinavia',    name: 'Scandinavia',    description: 'Norway, Sweden, Finland.',                      flightBounds: { latMin: 55, latMax: 72, lonMin: 4, lonMax: 32 }, group: 'europe', aliases: ['nordics'], priority: 3 },
+  // Europe country-level subregions (added v2.5)
+  { id: 'poland',         name: 'Poland',         description: 'Poland + Suwalki Gap.',                         flightBounds: { latMin: 49, latMax: 55, lonMin: 14, lonMax: 24 }, group: 'europe', aliases: ['pl'], priority: 2 },
+  { id: 'greece',         name: 'Greece',         description: 'Greece + Aegean islands.',                      flightBounds: { latMin: 34, latMax: 42, lonMin: 19, lonMax: 28 }, group: 'europe', aliases: ['gr', 'hellas'], priority: 2 },
+  { id: 'spain',          name: 'Spain',          description: 'Iberian Peninsula + Ceuta + Melilla + Canary airspace prox.', flightBounds: { latMin: 36, latMax: 44, lonMin: -10, lonMax: 4 }, group: 'europe', aliases: ['es'], priority: 3 },
 
   // Americas
   { id: 'usa',         name: 'USA',         description: 'Continental US.',                   flightBounds: { latMin: 24, latMax: 50, lonMin: -125, lonMax: -66 }, group: 'americas', aliases: ['us', 'united_states', 'conus'], priority: 2 },
@@ -74,6 +78,10 @@ const SUBREGIONS: RegionDefinition[] = [
   { id: 'caribbean',   name: 'Caribbean',   description: 'Caribbean islands.',                flightBounds: { latMin: 8,  latMax: 28, lonMin: -90, lonMax: -60 }, group: 'americas', aliases: [], priority: 3 },
   { id: 'brazil',      name: 'Brazil',      description: 'Brazil.',                           flightBounds: { latMin: -34, latMax: 6, lonMin: -74, lonMax: -34 }, group: 'americas', aliases: [], priority: 3 },
   { id: 'argentina',   name: 'Argentina',   description: 'Argentina + Chile + Uruguay.',      flightBounds: { latMin: -56, latMax: -20, lonMin: -76, lonMax: -53 }, group: 'americas', aliases: [], priority: 3 },
+  // Americas country-level subregions (added v2.5)
+  { id: 'venezuela',   name: 'Venezuela',   description: 'Venezuela + Caribbean coast.',      flightBounds: { latMin: 0,  latMax: 13, lonMin: -73, lonMax: -60 }, group: 'americas', aliases: ['ve'], priority: 2 },
+  { id: 'colombia',    name: 'Colombia',    description: 'Colombia + FARC territory.',        flightBounds: { latMin: -5, latMax: 13, lonMin: -79, lonMax: -67 }, group: 'americas', aliases: ['co'], priority: 2 },
+  { id: 'cuba',        name: 'Cuba',        description: 'Cuba + Guantanamo airspace.',       flightBounds: { latMin: 19, latMax: 24, lonMin: -85, lonMax: -74 }, group: 'americas', aliases: [], priority: 3 },
 
   // Asia
   { id: 'central_asia',  name: 'Central Asia',  description: '-stans.',                  flightBounds: { latMin: 30, latMax: 56, lonMin: 46, lonMax: 90 }, group: 'asia', aliases: ['stans'], priority: 3 },
@@ -84,16 +92,30 @@ const SUBREGIONS: RegionDefinition[] = [
   { id: 'japan',         name: 'Japan',         description: 'Japan archipelago.',       flightBounds: { latMin: 24, latMax: 46, lonMin: 128, lonMax: 146 }, group: 'asia', aliases: [], priority: 3 },
   { id: 'korea',         name: 'Korea',         description: 'DPRK + ROK.',              flightBounds: { latMin: 33, latMax: 43, lonMin: 124, lonMax: 132 }, group: 'asia', aliases: [], priority: 3 },
   { id: 'india',         name: 'India',         description: 'India + adjacent waters.', flightBounds: { latMin: 6,  latMax: 38, lonMin: 68, lonMax: 98 }, group: 'asia', aliases: [], priority: 3 },
+  // Asia country-level subregions (added v2.5)
+  { id: 'vietnam',       name: 'Vietnam',       description: 'Vietnam + South China Sea coast.', flightBounds: { latMin: 8,  latMax: 24, lonMin: 102, lonMax: 110 }, group: 'asia', aliases: ['vn'], priority: 2 },
+  { id: 'indonesia',     name: 'Indonesia',     description: 'Indonesia archipelago.',         flightBounds: { latMin: -11, latMax: 6, lonMin: 95, lonMax: 141 }, group: 'asia', aliases: ['id'], priority: 2 },
+  { id: 'philippines',   name: 'Philippines',   description: 'Philippines archipelago + WPS.', flightBounds: { latMin: 5,  latMax: 21, lonMin: 117, lonMax: 127 }, group: 'asia', aliases: ['ph', 'phil'], priority: 2 },
+  { id: 'myanmar',       name: 'Myanmar',       description: 'Myanmar + Rakhine + Shan.',       flightBounds: { latMin: 10, latMax: 28, lonMin: 92, lonMax: 101 }, group: 'asia', aliases: ['mm', 'burma'], priority: 2 },
 
   // Africa
   { id: 'north_africa',  name: 'North Africa',  description: 'Maghreb + Egypt + Sudan.', flightBounds: { latMin: 10, latMax: 38, lonMin: -17, lonMax: 38 }, group: 'africa', aliases: ['nafrica', 'maghreb'], priority: 3 },
   { id: 'west_africa',   name: 'West Africa',   description: 'ECOWAS region.',          flightBounds: { latMin: -5, latMax: 22, lonMin: -18, lonMax: 16 }, group: 'africa', aliases: [], priority: 3 },
   { id: 'east_africa',   name: 'East Africa',   description: 'Horn of Africa.',         flightBounds: { latMin: -15, latMax: 18, lonMin: 30, lonMax: 52 }, group: 'africa', aliases: ['horn'], priority: 3 },
   { id: 'southern_africa',name: 'Southern Africa',description: 'S of the equator.',      flightBounds: { latMin: -35, latMax: 0,  lonMin: 11, lonMax: 41 }, group: 'africa', aliases: [], priority: 3 },
+  // Africa country-level subregions (added v2.5)
+  { id: 'sudan',         name: 'Sudan',         description: 'Sudan + disputed Abyei.',         flightBounds: { latMin: 8,  latMax: 23, lonMin: 21, lonMax: 39 }, group: 'africa', aliases: ['sd'], priority: 1 },
+  { id: 'nigeria',       name: 'Nigeria',       description: 'Nigeria + Lake Chad basin.',      flightBounds: { latMin: 4,  latMax: 14, lonMin: 3,  lonMax: 15 }, group: 'africa', aliases: ['ng'], priority: 2 },
+  { id: 'ethiopia',      name: 'Ethiopia',      description: 'Ethiopia + Tigray.',              flightBounds: { latMin: 3,  latMax: 15, lonMin: 32, lonMax: 48 }, group: 'africa', aliases: ['et'], priority: 2 },
+  { id: 'drc',           name: 'DR Congo',      description: 'DRC + Kivu provinces.',           flightBounds: { latMin: -13,latMax: 6,  lonMin: 12, lonMax: 32 }, group: 'africa', aliases: ['dr_congo', 'congo', 'cd'], priority: 2 },
+  { id: 'kenya',         name: 'Kenya',         description: 'Kenya + Somalia border.',         flightBounds: { latMin: -5, latMax: 5,  lonMin: 33, lonMax: 42 }, group: 'africa', aliases: ['ke'], priority: 3 },
+  { id: 'tanzania',      name: 'Tanzania',      description: 'Tanzania + Zanzibar.',            flightBounds: { latMin: -12,latMax: -1, lonMin: 29, lonMax: 41 }, group: 'africa', aliases: ['tz'], priority: 3 },
+  { id: 'south_africa',  name: 'South Africa',  description: 'Republic of South Africa + Lesotho + eSwatini.', flightBounds: { latMin: -35, latMax: -22, lonMin: 16, lonMax: 33 }, group: 'africa', aliases: ['sa', 'rsa', 'za'], priority: 3 },
 
   // Oceania
   { id: 'australia',     name: 'Australia',     description: 'Aussie continent + Tasmania.', flightBounds: { latMin: -45, latMax: -10, lonMin: 112, lonMax: 154 }, group: 'oceania', aliases: ['aus'], priority: 3 },
   { id: 'new_zealand',   name: 'New Zealand',   description: 'NZ.',                            flightBounds: { latMin: -48, latMax: -34, lonMin: 165, lonMax: 179 }, group: 'oceania', aliases: ['nz'], priority: 3 },
+  { id: 'papua_new_guinea', name: 'Papua New Guinea', description: 'PNG archipelago + Bougainville.', flightBounds: { latMin: -12, latMax: 0,  lonMin: 140, lonMax: 156 }, group: 'oceania', aliases: ['png'], priority: 3 },
 ];
 
 export const ALL_REGIONS: RegionDefinition[] = [GLOBAL, ...CONTINENTS, ...SUBREGIONS];

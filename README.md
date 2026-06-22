@@ -18,7 +18,7 @@
 
 <br>
 
-### 🦀 CLAWDWATCH LOBSTER EDITION — v2.4
+### 🦀 CLAWDWATCH LOBSTER EDITION — v2.5
 
 *"See what they don't want you to see — everywhere on Earth"*
 
@@ -27,7 +27,7 @@
 | | |
 |:--|:--|
 | 🟢 **HTTP API** | Port 3444, JSON |
-| 🌍 **Coverage** | Truly global — 44 regions across 6 continents |
+| 🌍 **Coverage** | Truly global — **62 regions** across 6 continents |
 | 🛰 **Endpoints** | 34 (Intel + RECON + OSIRIS-derived) |
 | ✈️ **Flights** | OpenSky Network (global) |
 | 📰 **News** | 30 RSS feeds, global |
@@ -117,14 +117,14 @@ curl http://localhost:3444/ssl/github.com
 |----------|-------------|
 | `GET /` | Index of every registered endpoint |
 | `GET /status` | Service health (regions, feeds, cache, key status) |
-| `GET /regions` | All 44 regions with lat/lon bounds, groups, priority |
+| `GET /regions` | All 62 regions with lat/lon bounds, groups, priority |
 
 ### Flights (OpenSky)
 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /flights` | Aggregate counts across 20 priority regions |
-| `GET /flights/all` | Every defined region (44 queries, slower) |
+| `GET /flights/all` | Every defined region (62 queries, slower) |
 | `GET /flights/:region` | Single region by id or alias (e.g. `/flights/me`, `/flights/jp`) |
 | `GET /flights/global` | Whole-world OpenSky query |
 
@@ -217,21 +217,56 @@ Every optional endpoint can be disabled/enabled per-deployment via env. **Defaul
 - Set `PORT_SCAN_ALLOW_PRIVATE=true` to override SSRF guards
 - 31-port default scan + service fingerprinting via banner grab
 
+### OpenSanctions setup
+
+`/sanctions`, `/ofac/check`, `/ofac/refresh`, and the `ofac_sanctioned` field in `/whois`, `/geo`, `/crypto/*` all need an OpenSanctions data source. Two paths:
+
+**Path A — hosted API key (5 min setup, default):**
+
+1. Sign up free at https://opensanctions.org/
+2. Open the API dashboard: https://opensanctions.org/api/
+3. Click **Generate API key** → copy the 40-char string
+4. Paste in `.env`:
+   ```
+   OPENSANCTIONS_API_KEY=<your-key-here>
+   ```
+5. Restart the server. `GET /ofac/refresh` will populate the cache; `ofac_sanctioned` fields will then populate in whois/geo/crypto responses.
+
+**Path B — fully on-premise (no third-party, no rate limits):**
+
+OpenSanctions publishes the full dataset and a self-hostable API server called **yente**. You can run it offline. Docs: https://www.opensanctions.org/docs/on-premise/
+
+- **Bulk download** (CSV/JSON → SQLite/Postgres):
+  ```bash
+  pip install opensanctions
+  opensanctions build datasets.yml       # ~6 GB download + index
+  ```
+- **Local API server** (Docker, same interface as the hosted one):
+  ```bash
+  docker run -d -p 8000:8000 \
+    -e YENTE_API_KEY=anything \
+    -e YENTE_DATABASE_URI=sqlite:///opensanctions.db \
+    ghcr.io/opensanctions/yente:latest
+  ```
+  Then point `OPENSANCTIONS_BASE_URL=http://localhost:8000` in `.env` and update the base URL inside `sanctionsLookup()` in `src/sources/osiris.ts`.
+
+On-prem is heavier to set up but gives you: zero rate limits, full historical snapshot (not just current SDN list), and air-gapped operation (good for sensitive investigations).
+
 ---
 
-## 🌍 Global Region Coverage (44 regions)
+## 🌍 Global Region Coverage (62 regions)
 
-ClawdWatch is **truly global**, not region-biased. 44 regions across 6 continents:
+ClawdWatch is **truly global**, not region-biased. 62 regions across 6 continents:
 
 | Group | Count | Regions |
 |-------|-------|---------|
 | **Continental** | 6 | `europe` · `north_america` · `south_america` · `africa` · `asia` · `oceania` |
-| **Americas** | 6 | `usa` · `canada` · `mexico` · `caribbean` · `brazil` · `argentina` |
-| **Europe** | 4 | `eastern_europe` · `british_isles` · `mediterranean` · `scandinavia` |
+| **Americas** | 9 | `usa` · `canada` · `mexico` · `caribbean` · `brazil` · `argentina` · `venezuela` · `colombia` · `cuba` |
+| **Europe** | 7 | `eastern_europe` · `british_isles` · `mediterranean` · `scandinavia` · `poland` · `greece` · `spain` |
 | **Middle East / Gulf** | 13 | `middle_east` · `iran` · `israel` · `lebanon` · `syria` · `iraq` · `yemen` · `saudi_arabia` · `uae` · `qatar` · `kuwait` · `oman` · `turkey` |
-| **Asia** | 8 | `central_asia` · `south_asia` · `east_asia` · `southeast_asia` · `china` · `japan` · `korea` · `india` |
-| **Africa** | 4 | `north_africa` · `west_africa` · `east_africa` · `southern_africa` |
-| **Oceania** | 2 | `australia` · `new_zealand` |
+| **Asia** | 12 | `central_asia` · `south_asia` · `east_asia` · `southeast_asia` · `china` · `japan` · `korea` · `india` · `vietnam` · `indonesia` · `philippines` · `myanmar` |
+| **Africa** | 11 | `north_africa` · `west_africa` · `east_africa` · `southern_africa` · `sudan` · `nigeria` · `ethiopia` · `drc` · `kenya` · `tanzania` · `south_africa` |
+| **Oceania** | 3 | `australia` · `new_zealand` · `papua_new_guinea` |
 
 All regions support aliases (e.g. `me`, `gulf`, `levant`, `ksa`, `apac`, `nafrica`, `jp`).
 
@@ -357,7 +392,7 @@ All keys are **optional**. The server runs without any of them. Add keys to unlo
 clawdwatch-lobster-edition/
 ├── src/
 │   ├── http.ts           # HTTP API server (port 3444) — all 34 routes
-│   ├── regions.ts        # 44 region definitions (lat/lon, group, priority)
+│   ├── regions.ts        # 62 region definitions (lat/lon, group, priority)
 │   ├── index.ts          # Main CLI entry
 │   ├── cli.ts            # Command-line interface
 │   ├── alerts/
@@ -405,7 +440,10 @@ clawdwatch-lobster-edition/
 
 ---
 
-## 🔄 What Changed (v2.2 → v2.4)
+## 🔄 What Changed (v2.2 → v2.5)
+
+### v2.5 — Regions expansion + CLI rewrite
+**+18 regions** (44 → 62) filling real coverage gaps across all continents: Sudan, Nigeria, Ethiopia, DR Congo, Kenya, Tanzania, South Africa; Poland, Greece, Spain; Vietnam, Indonesia, Philippines, Myanmar; Venezuela, Colombia, Cuba; Papua New Guinea. Country-level granularity for high-traffic OSINT theaters. Each region has full lat/lon bounds for OpenSky queries, descriptive metadata, and aliases (`me`, `jp`, `pl`, `vn`, etc). **CLI rewritten from scratch** (`src/cli.ts`): the old version referenced dead `RegionName`/`getRegionDefinition`/`listRegionDefinitions`/`resolveRegionInputs` symbols and failed `npx tsc --noEmit`. New CLI is a thin HTTP client (`npm run regions`, `npm run snapshot -- --region X`) so it can't drift from the server. **MCP server auto-sync** (this release — 6 hardcoded tools → 37 live tools). **OpenSanctions setup docs** added with both hosted (5 min) and on-prem (Docker yente) paths.
 
 ### v2.2 — OSIRIS integration (initial)
 Added 9 OSIRIS-derived endpoints: sanctions, crypto, fires, CVE, WHOIS, DNS, Telegram. Toggle-controlled for features needing API keys.

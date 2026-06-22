@@ -1,6 +1,6 @@
 {
   "name": "clawdwatch",
-  "version": "0.1.0",
+  "version": "2.5.0-lobster",
   "description": "🦀 The all-seeing OSINT agent — real-time conflict intelligence powered by Clawdbot",
   "main": "src/index.ts",
   "scripts": {
