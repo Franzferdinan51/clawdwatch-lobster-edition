@@ -327,7 +327,7 @@ Add to `~/.lmstudio/mcp.json`:
 }
 ```
 
-The MCP server proxies to `http://localhost:3444` and exposes the full endpoint catalog as MCP tools (`clawdwatch_status`, `clawdwatch_flights`, `clawdwatch_osint`, `clawdwatch_whois`, `clawdwatch_geo`, `clawdwatch_ssl`, `clawdwatch_scan`, etc.).
+The MCP server proxies to `http://localhost:3444` and **auto-syncs its tool catalog from the live server's `/` endpoint on every startup**. Whatever endpoints the server exposes, MCP exposes as `clawdwatch_*` tools — no manual catalog maintenance needed. 37 tools as of v2.4 (`clawdwatch_status`, `clawdwatch_flights`, `clawdwatch_osint`, `clawdwatch_whois`, `clawdwatch_geo`, `clawdwatch_sslInspect`, `clawdwatch_scan`, `clawdwatch_liveNews`, `clawdwatch_ofacCheck`, ...). Override the backend URL with the `CLAWDWATCH_URL` env var.
 
 **Lobster bonus:** with [Desktop Control Lobster](https://github.com/Franzferdinan51/clawdwatch-lobster-edition) you can chain MCP tool output to direct mouse/keyboard automation of any desktop app or Android device.
 
