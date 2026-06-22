@@ -59,6 +59,11 @@ const ENDPOINTS = [
   ['/cyber-threats?days=60', 30],                          // works (CISA KEV, no key)
   ['/geo?ip=8.8.8.8', 15],                                 // works (3-provider cascade, no key)
   ['/air-quality', 30],                                    // works (Open-Meteo, no key)
+  // RECON toolkit additions
+  ['/ssl/github.com', 15],                                 // works (Node tls module, no key)
+  ['/news/live', 5],                                       // works (static feed catalog, no key)
+  ['/ofac/check?q=test', 5],                               // works (no key, returns null gracefully)
+  ['/scan?host=github.com', 5],                            // disabled by default (PORT_SCAN_ENABLED=false)
   // needs API key — gracefully 404s without one
   ['/sanctions?q=Putin', 15],                              // needs OPENSANCTIONS_API_KEY
   ['/fires?hours=24', 30],                                 // needs FIRMS_MAP_KEY

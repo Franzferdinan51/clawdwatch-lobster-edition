@@ -1005,3 +1005,388 @@ export async function fetchAirQuality(): Promise<AirQualityStation[]> {
     30 * 60 * 1000,
   )) ?? [];
 }
+
+// ---------------------------------------------------------------------------
+// SSL/TLS Certificate Inspector (uses Node's built-in tls module — no key)
+// ---------------------------------------------------------------------------
+
+import * as tls from 'tls';
+import * as net from 'net';
+import * as dns from 'dns';
+
+function cn(value: string | string[] | undefined): string {
+  if (!value) return '';
+  return Array.isArray(value) ? (value[0] ?? '') : value;
+}
+
+export interface TlsReport {
+  host: string;
+  port: number;
+  reachable: boolean;
+  protocol?: string;
+  cipher?: string;
+  cert?: {
+    subject_cn: string;
+    subject_o: string;
+    issuer_cn: string;
+    issuer_o: string;
+    valid_from: string;
+    valid_to: string;
+    days_until_expiry: number;
+    serial_number: string;
+    fingerprint_sha256: string;
+    fingerprint_sha1: string;
+    signature_algorithm: string;
+    sans: string[];
+    self_signed: boolean;
+    expired: boolean;
+    expiry_warning: boolean;
+  };
+  error?: string;
+  timestamp: string;
+}
+
+function getTlsCert(host: string, port = 443, timeoutMs = 8000): Promise<{ cert: tls.PeerCertificate; protocol: string; cipherName: string }> {
+  return new Promise((resolve, reject) => {
+    const socket = tls.connect(
+      { host, port, servername: host, rejectUnauthorized: false, timeout: timeoutMs },
+      () => {
+        const cert = socket.getPeerCertificate(true);
+        const protocol = socket.getProtocol() ?? 'unknown';
+        const cipher = socket.getCipher().name;
+        socket.end();
+        if (!cert || Object.keys(cert).length === 0) {
+          reject(new Error('No certificate returned'));
+        } else {
+          resolve({ cert, protocol, cipherName: cipher });
+        }
+      },
+    );
+    socket.on('error', reject);
+    socket.on('timeout', () => {
+      socket.destroy();
+      reject(new Error(`TLS timeout after ${timeoutMs}ms`));
+    });
+  });
+}
+
+export async function inspectTlsCertificate(host: string, port = 443): Promise<TlsReport | null> {
+  // Strip protocol prefix if user pasted a URL
+  const cleanHost = host.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+  if (!/^[a-zA-Z0-9.-]+$/.test(cleanHost)) return null;
+
+  return cached(
+    `tls:${cleanHost}:${port}`,
+    async () => {
+      const base: TlsReport = {
+        host: cleanHost,
+        port,
+        reachable: false,
+        timestamp: new Date().toISOString(),
+      };
+      try {
+        const { cert, protocol, cipherName } = await getTlsCert(cleanHost, port);
+        base.reachable = true;
+        base.protocol = protocol;
+        base.cipher = cipherName;
+        const validTo = new Date(cert.valid_to);
+        const now = new Date();
+        const daysUntilExpiry = Math.round((validTo.getTime() - now.getTime()) / 86_400_000);
+        const sans = (cert.subjectaltname ?? '')
+          .split(/, /)
+          .map(s => s.replace(/^DNS:/, ''))
+          .filter(Boolean);
+        const selfSigned = cn(cert.issuer?.CN) === cn(cert.subject?.CN);
+        base.cert = {
+          subject_cn: cn(cert.subject?.CN),
+          subject_o: cn(cert.subject?.O),
+          issuer_cn: cn(cert.issuer?.CN),
+          issuer_o: cn(cert.issuer?.O),
+          valid_from: cert.valid_from,
+          valid_to: cert.valid_to,
+          days_until_expiry: daysUntilExpiry,
+          serial_number: cert.serialNumber ?? '',
+          fingerprint_sha256: cert.fingerprint256 ?? '',
+          fingerprint_sha1: (cert as any).fingerprint1 ?? '',
+          signature_algorithm: (cert as any).signatureAlgorithm ?? 'unknown',
+          sans,
+          self_signed: selfSigned,
+          expired: daysUntilExpiry < 0,
+          expiry_warning: daysUntilExpiry >= 0 && daysUntilExpiry < 30,
+        };
+        return base;
+      } catch (e: any) {
+        base.reachable = false;
+        base.error = e.message;
+        return base;
+      }
+    },
+    60 * 60 * 1000,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Live News Broadcast Network (static feed catalog — no API call needed)
+// ---------------------------------------------------------------------------
+
+export interface LiveNewsFeed {
+  id: string;
+  name: string;
+  city: string;
+  country: string;
+  lat: number;
+  lng: number;
+  url: string;
+  embed_allowed: boolean;
+  category: 'mainstream' | 'government' | 'finance' | 'state' | 'conflict';
+  language: string;
+}
+
+export const LIVE_NEWS_FEEDS: LiveNewsFeed[] = [
+  // North America
+  { id: 'nbcnews',   name: 'NBC News NOW',  city: 'New York',      country: 'US', lat: 40.759, lng: -73.980, url: 'https://www.youtube.com/channel/UCeY0bbntWzzVIaj2z3QigXg/live', embed_allowed: false, category: 'mainstream', language: 'en' },
+  { id: 'cbsnews',   name: 'CBS News 24/7', city: 'New York',      country: 'US', lat: 40.764, lng: -73.973, url: 'https://www.youtube.com/channel/UC8p1vwvWtl6T73JiExfWs1g/live', embed_allowed: false, category: 'mainstream', language: 'en' },
+  { id: 'abcnews',   name: 'ABC News Live', city: 'New York',      country: 'US', lat: 40.763, lng: -73.979, url: 'https://www.youtube.com/channel/UCBi2mrWuNuyYy4gbM6fU18Q/live', embed_allowed: false, category: 'mainstream', language: 'en' },
+  { id: 'bloomberg', name: 'Bloomberg TV',  city: 'New York',      country: 'US', lat: 40.756, lng: -73.988, url: 'https://www.youtube.com/channel/UC_vQ72b7v5n2938v9d5c80w/live', embed_allowed: false, category: 'finance',    language: 'en' },
+  { id: 'cspan',     name: 'C-SPAN',        city: 'Washington DC', country: 'US', lat: 38.897, lng: -77.036, url: 'https://www.youtube.com/channel/UCb--64Gl51jIEVE-GLDAVTg/live', embed_allowed: false, category: 'government', language: 'en' },
+  { id: 'cbc',       name: 'CBC News',      city: 'Toronto',       country: 'CA', lat: 43.644, lng: -79.387, url: 'https://www.youtube.com/channel/UCKy1dAqELon0zgzZPOz9SVw/live', embed_allowed: false, category: 'mainstream', language: 'en' },
+  // Europe
+  { id: 'skynews',    name: 'Sky News',      city: 'London', country: 'GB', lat: 51.500, lng: -0.118, url: 'https://www.youtube.com/embed/live_stream?channel=UCoMdktPbSTixAyNGwb-UYkQ&autoplay=1&mute=1', embed_allowed: true, category: 'mainstream', language: 'en' },
+  { id: 'france24en', name: 'France 24 EN',  city: 'Paris',  country: 'FR', lat: 48.830, lng:  2.280, url: 'https://www.youtube.com/embed/live_stream?channel=UCQfwfsi5VrQ8yKZ-UWmAEFg&autoplay=1&mute=1', embed_allowed: true, category: 'mainstream', language: 'en' },
+  { id: 'dwnews',     name: 'DW News',       city: 'Berlin', country: 'DE', lat: 52.508, lng: 13.376, url: 'https://www.youtube.com/embed/live_stream?channel=UCknLrEdhRCp1aegoMqRaCZg&autoplay=1&mute=1', embed_allowed: true, category: 'mainstream', language: 'en' },
+  // Middle East
+  { id: 'aljazeera',  name: 'Al Jazeera EN', city: 'Doha', country: 'QA', lat: 25.286, lng: 51.534, url: 'https://www.youtube.com/embed/live_stream?channel=UCNye-wNBqNL5ZzHSJj3l8Bg&autoplay=1&mute=1', embed_allowed: true, category: 'mainstream', language: 'en' },
+  // Asia Pacific
+  { id: 'nhkworld', name: 'NHK World',  city: 'Tokyo',     country: 'JP', lat: 35.690, lng: 139.692, url: 'https://www.youtube.com/embed/live_stream?channel=UCSPEjw8F2nQDtmUKPFNF7_A&autoplay=1&mute=1', embed_allowed: true, category: 'mainstream', language: 'en' },
+  { id: 'cna',      name: 'CNA 24/7',  city: 'Singapore', country: 'SG', lat:  1.290, lng: 103.852, url: 'https://www.youtube.com/embed/live_stream?channel=UC83jt4dlz1Gjl58fzQrrKZg&autoplay=1&mute=1', embed_allowed: true, category: 'mainstream', language: 'en' },
+  { id: 'wion',     name: 'WION',      city: 'New Delhi', country: 'IN', lat: 28.614, lng:  77.209, url: 'https://www.youtube.com/embed/live_stream?channel=UC_gUM8rL-Lrg6O3adPW9K1g&autoplay=1&mute=1', embed_allowed: true, category: 'mainstream', language: 'en' },
+  { id: 'cgtn',     name: 'CGTN',      city: 'Beijing',   country: 'CN', lat: 39.904, lng: 116.407, url: 'https://www.youtube.com/channel/UCgrNz-aDmcr2uuto8_DL2jg/live', embed_allowed: false, category: 'state', language: 'en' },
+  // State media
+  { id: 'rt',       name: 'RT News',   city: 'Moscow',  country: 'RU', lat: 55.755, lng:  37.617, url: 'https://rumble.com/c/RTNewsEN', embed_allowed: false, category: 'state', language: 'en' },
+];
+
+export async function fetchLiveNewsFeeds(category?: string): Promise<LiveNewsFeed[]> {
+  if (!category) return LIVE_NEWS_FEEDS;
+  return LIVE_NEWS_FEEDS.filter(f => f.category === category);
+}
+
+// ---------------------------------------------------------------------------
+// OFAC sanctions cache (used by whois, geo, crypto to auto-flag results)
+// Populated by /sanctions queries — without OPENSANCTIONS_API_KEY it stays empty
+// and all auto-flag checks return null.
+// ---------------------------------------------------------------------------
+
+const ofacCache: Set<string> = new Set(); // lowercase names + addresses
+
+export async function refreshOfacCache(): Promise<number> {
+  if (!process.env.OPENSANCTIONS_API_KEY) return 0;
+  try {
+    const r = await axios.get('https://api.opensanctions.org/search/default?limit=1000', {
+      headers: { 'Authorization': `Bearer ${process.env.OPENSANCTIONS_API_KEY}` },
+      timeout: 15_000,
+    });
+    const entities = r.data?.results ?? [];
+    let added = 0;
+    for (const e of entities) {
+      const name = (e.caption ?? e.name ?? '').toLowerCase().trim();
+      if (name) { ofacCache.add(name); added++; }
+    }
+    return added;
+  } catch (e: any) {
+    console.error(`[osiris:ofac-cache] error: ${e.message}`);
+    return 0;
+  }
+}
+
+export function checkOfac(value: string): boolean | null {
+  if (!process.env.OPENSANCTIONS_API_KEY) return null; // no key = can't check
+  if (ofacCache.size === 0) return null; // not yet populated
+  return ofacCache.has(value.toLowerCase().trim());
+}
+
+export function ofacCacheSize(): number {
+  return ofacCache.size;
+}
+
+// ---------------------------------------------------------------------------
+// Port Scanner — LOCAL TCP connect scan
+// Default OFF (PORT_SCAN_ENABLED=false). Requires explicit opt-in via env.
+// Built-in SSRF guards: rejects private/loopback/link-local/multicast IPs
+// unless PORT_SCAN_ALLOW_PRIVATE=true is also set.
+// ---------------------------------------------------------------------------
+
+const COMMON_PORTS: Array<{ port: number; service: string }> = [
+  { port: 21,   service: 'ftp' },
+  { port: 22,   service: 'ssh' },
+  { port: 23,   service: 'telnet' },
+  { port: 25,   service: 'smtp' },
+  { port: 53,   service: 'dns' },
+  { port: 80,   service: 'http' },
+  { port: 110,  service: 'pop3' },
+  { port: 143,  service: 'imap' },
+  { port: 443,  service: 'https' },
+  { port: 445,  service: 'smb' },
+  { port: 465,  service: 'smtps' },
+  { port: 587,  service: 'smtp-submission' },
+  { port: 993,  service: 'imaps' },
+  { port: 995,  service: 'pop3s' },
+  { port: 1433, service: 'mssql' },
+  { port: 1521, service: 'oracle' },
+  { port: 2082, service: 'cpanel' },
+  { port: 2083, service: 'cpanel-ssl' },
+  { port: 2086, service: 'whm' },
+  { port: 2087, service: 'whm-ssl' },
+  { port: 3306, service: 'mysql' },
+  { port: 3389, service: 'rdp' },
+  { port: 5432, service: 'postgresql' },
+  { port: 5900, service: 'vnc' },
+  { port: 6379, service: 'redis' },
+  { port: 8000, service: 'http-alt' },
+  { port: 8080, service: 'http-proxy' },
+  { port: 8443, service: 'https-alt' },
+  { port: 8888, service: 'http-alt2' },
+  { port: 9090, service: 'prometheus' },
+  { port: 9200, service: 'elasticsearch' },
+  { port: 27017, service: 'mongodb' },
+];
+
+const PRIVATE_RANGES = [
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^169\.254\./,
+  /^::1$/,
+  /^fc[0-9a-f]{2}:/i,
+  /^fe[89ab][0-9a-f]:/i,
+  /^224\./,
+];
+
+async function resolveAndCheck(host: string): Promise<{ ok: boolean; reason?: string; ip?: string }> {
+  // Reject obviously bad input
+  if (!/^[a-zA-Z0-9.-]+$/.test(host)) {
+    return { ok: false, reason: 'Invalid hostname format' };
+  }
+  // If user provided an IP literal, check directly
+  let ip = host;
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(host) && !/^[0-9a-f:]+$/i.test(host)) {
+    try {
+      const { address } = await new Promise<{ address: string }>((resolve, reject) => {
+        dns.lookup(host, { all: false }, (err, address) => {
+          if (err) reject(err); else resolve({ address });
+        });
+      });
+      ip = address;
+    } catch (e: any) {
+      return { ok: false, reason: `DNS resolution failed: ${e.message}` };
+    }
+  }
+  if (process.env.PORT_SCAN_ALLOW_PRIVATE !== 'true') {
+    for (const r of PRIVATE_RANGES) {
+      if (r.test(ip)) {
+        return { ok: false, reason: `Target ${ip} is in a private/reserved range. Set PORT_SCAN_ALLOW_PRIVATE=true to override.` };
+      }
+    }
+  }
+  return { ok: true, ip };
+}
+
+async function tcpProbe(host: string, port: number, timeoutMs = 3000): Promise<{ open: boolean; latency_ms: number; banner?: string }> {
+  const start = Date.now();
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let banner = '';
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => {
+      const latency = Date.now() - start;
+      // Try to grab a banner for 1.5s
+      const grabTimer = setTimeout(() => {
+        socket.destroy();
+        resolve({ open: true, latency_ms: latency, banner: banner || undefined });
+      }, 1500);
+      socket.once('data', (chunk) => {
+        banner = chunk.toString('ascii', 0, Math.min(chunk.length, 200)).replace(/[^\x20-\x7e]/g, '');
+        clearTimeout(grabTimer);
+        socket.destroy();
+        resolve({ open: true, latency_ms: latency, banner: banner || undefined });
+      });
+      // If no data, write nothing — just close after timer
+      socket.write('');
+    });
+    socket.once('timeout', () => {
+      socket.destroy();
+      resolve({ open: false, latency_ms: Date.now() - start });
+    });
+    socket.once('error', () => {
+      resolve({ open: false, latency_ms: Date.now() - start });
+    });
+    socket.connect(port, host);
+  });
+}
+
+export interface PortScanResult {
+  target: string;
+  resolved_ip?: string;
+  scanned_ports: number;
+  open_count: number;
+  closed_count: number;
+  duration_ms: number;
+  results: Array<{ port: number; service: string; open: boolean; latency_ms?: number; banner?: string }>;
+  timestamp: string;
+  blocked?: boolean;
+  reason?: string;
+}
+
+export async function scanPorts(host: string, ports?: number[]): Promise<PortScanResult | null> {
+  if (process.env.PORT_SCAN_ENABLED !== 'true') {
+    return {
+      target: host,
+      scanned_ports: 0,
+      open_count: 0,
+      closed_count: 0,
+      duration_ms: 0,
+      results: [],
+      timestamp: new Date().toISOString(),
+      blocked: true,
+      reason: 'Port scanner disabled. Set PORT_SCAN_ENABLED=true in .env to enable.',
+    };
+  }
+  const guard = await resolveAndCheck(host);
+  if (!guard.ok) {
+    return {
+      target: host,
+      scanned_ports: 0,
+      open_count: 0,
+      closed_count: 0,
+      duration_ms: 0,
+      results: [],
+      timestamp: new Date().toISOString(),
+      blocked: true,
+      reason: guard.reason,
+    };
+  }
+  const portList = (ports && ports.length > 0)
+    ? ports.slice(0, 100).map(p => ({
+        port: p,
+        service: COMMON_PORTS.find(cp => cp.port === p)?.service ?? 'unknown',
+      }))
+    : COMMON_PORTS;
+  const start = Date.now();
+  const results = await Promise.all(
+    portList.map(async (p) => {
+      const r = await tcpProbe(host, p.port, 3000);
+      return { port: p.port, service: p.service, ...r };
+    }),
+  );
+  const open_count = results.filter(r => r.open).length;
+  return {
+    target: host,
+    resolved_ip: guard.ip,
+    scanned_ports: results.length,
+    open_count,
+    closed_count: results.length - open_count,
+    duration_ms: Date.now() - start,
+    results,
+    timestamp: new Date().toISOString(),
+  };
+}

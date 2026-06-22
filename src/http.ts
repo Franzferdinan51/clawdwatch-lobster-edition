@@ -22,6 +22,12 @@ import {
   fetchCyberThreats,
   geoLocate,
   fetchAirQuality,
+  inspectTlsCertificate,
+  fetchLiveNewsFeeds,
+  refreshOfacCache,
+  checkOfac,
+  ofacCacheSize,
+  scanPorts,
 } from './sources/osiris';
 
 const app = express();
@@ -183,6 +189,11 @@ app.get('/', (req, res) => {
       cyberThreats: 'GET /cyber-threats?days=    (CISA Known Exploited Vulnerabilities, free)',
       geo:          'GET /geo?ip=                (IP geolocation, 3-provider cascade)',
       airQuality:   'GET /air-quality?limit=     (OpenAQ global PM2.5 stations, free)',
+      sslInspect:   'GET /ssl/:host?port=        (TLS cert chain + expiry, free)',
+      liveNews:     'GET /news/live?category=    (15+ global 24/7 broadcasters)',
+      ofacCheck:    'GET /ofac/check?q=          (OFAC auto-flag; needs API key)',
+      ofacRefresh:  'POST /ofac/refresh          (reload OFAC cache from OpenSanctions)',
+      scan:         'GET /scan?host=&ports=      (TCP port scanner; PORT_SCAN_ENABLED=true)',
     },
   });
 });
@@ -289,6 +300,20 @@ app.get('/news', async (req, res) => {
     sourcesCount: RSS_FEEDS.filter((f) => f.enabled).length,
     total: deduped.length,
     news: deduped.slice(0, 50),
+  });
+});
+
+// GET /news/live — Live broadcast network catalog (must be before /news/:region!)
+// Query: ?category=mainstream|government|finance|state
+app.get('/news/live', async (req, res) => {
+  const category = req.query.category ? String(req.query.category) : undefined;
+  const feeds = await fetchLiveNewsFeeds(category);
+  res.json({
+    total: feeds.length,
+    embeddable: feeds.filter(f => f.embed_allowed).length,
+    categories: ['mainstream', 'government', 'finance', 'state'],
+    feeds,
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -500,6 +525,7 @@ app.get('/crypto/btc/:address', async (req, res) => {
   if (!info) {
     return res.status(400).json({ error: 'Invalid BTC address', address: req.params.address });
   }
+  (info as any).ofac_sanctioned = checkOfac(req.params.address);
   res.json(info);
 });
 
@@ -509,6 +535,7 @@ app.get('/crypto/eth/:address', async (req, res) => {
   if (!info) {
     return res.status(400).json({ error: 'Invalid ETH address', address: req.params.address });
   }
+  (info as any).ofac_sanctioned = checkOfac(req.params.address);
   res.json(info);
 });
 
@@ -555,7 +582,12 @@ app.get('/whois/:domain', async (req, res) => {
   if (!w) {
     return res.status(400).json({ error: 'Invalid domain', domain: req.params.domain });
   }
-  res.json(w);
+  // Auto-flag any registrant/country entities against OFAC cache
+  const entities = (w.entities ?? []).map((e: any) => ({
+    ...e,
+    ofac_sanctioned: checkOfac(e.name ?? ''),
+  }));
+  res.json({ ...w, entities, domain_sanctioned: checkOfac(req.params.domain) });
 });
 
 // GET /dns/:domain — DNS records (A, AAAA, MX, TXT, NS, CNAME)
@@ -645,6 +677,7 @@ app.get('/geo', async (req, res) => {
   const ip = String(req.query.ip ?? '');
   const data = await geoLocate(ip);
   if (!data) return res.status(503).json({ error: 'Geolocation lookup failed across all providers' });
+  (data as any).ofac_sanctioned = checkOfac(ip || data.ip);
   res.json(data);
 });
 
@@ -660,10 +693,60 @@ app.get('/air-quality', async (_req, res) => {
   });
 });
 
+// GET /ssl/:host — SSL/TLS certificate inspector
+// Query: ?port=443 (default 443)
+app.get('/ssl/:host', async (req, res) => {
+  const port = parseInt(String(req.query.port ?? '443'), 10) || 443;
+  const report = await inspectTlsCertificate(req.params.host, port);
+  if (!report) return res.status(400).json({ error: 'Invalid hostname' });
+  res.json(report);
+});
+
+// GET /ofac/check?q= — single-value OFAC cross-check
+// (Requires OPENSANCTIONS_API_KEY and a populated cache. Returns null otherwise.)
+app.get('/ofac/check', async (req, res) => {
+  const q = String(req.query.q ?? '').trim();
+  if (!q) return res.status(400).json({ error: 'q parameter required' });
+  const sanctioned = checkOfac(q);
+  res.json({
+    query: q,
+    ofac_sanctioned: sanctioned,
+    ofac_cache_size: ofacCacheSize(),
+    note: sanctioned === null ? 'OFAC check unavailable (no API key or empty cache)' : 'auto-flag from cached sanctions data',
+  });
+});
+
+// POST /ofac/refresh — reload OFAC cache from OpenSanctions
+app.post('/ofac/refresh', async (_req, res) => {
+  const added = await refreshOfacCache();
+  res.json({ added, cache_size: ofacCacheSize(), timestamp: new Date().toISOString() });
+});
+
+// GET /scan — Port scanner (requires PORT_SCAN_ENABLED=true in env)
+// Query: ?host=&ports=22,80,443  (comma-separated; omit for default 31-port scan)
+app.get('/scan', async (req, res) => {
+  const host = String(req.query.host ?? '').trim();
+  if (!host) return res.status(400).json({ error: 'host query param required' });
+  let ports: number[] | undefined;
+  if (req.query.ports) {
+    ports = String(req.query.ports)
+      .split(',')
+      .map(p => parseInt(p.trim(), 10))
+      .filter(p => !isNaN(p) && p > 0 && p < 65536);
+  }
+  const result = await scanPorts(host, ports);
+  if (!result) return res.status(400).json({ error: 'Invalid host' });
+  res.json(result);
+});
+
 app.listen(PORT, () => {
-  console.log(`ClawdWatch Lobster Edition v2.3 running on port ${PORT}`);
+  console.log(`ClawdWatch Lobster Edition v2.4 running on port ${PORT}`);
   console.log(`  regions:  ${ALL_REGIONS.length}`);
   console.log(`  rss:      ${RSS_FEEDS.filter((f) => f.enabled).length} feeds enabled`);
   console.log(`  defcon:   GET /defcon for current DEFCON level`);
-  console.log(`  osiris:   /sanctions /crypto/* /fires /cve/* /whois/* /dns/* /telegram/* /space-weather /sentinel /satellites /cyber-threats /geo /air-quality`);
+  console.log(`  osiris:   /sanctions /crypto/* /fires /cve/* /whois/* /dns/* /telegram/*`);
+  console.log(`            /space-weather /sentinel /satellites /cyber-threats /geo /air-quality`);
+  console.log(`  recon:    /ssl/:host /news/live /ofac/check /ofac/refresh /scan`);
+  console.log(`  scan:     ${process.env.PORT_SCAN_ENABLED === 'true' ? 'ENABLED' : 'disabled (set PORT_SCAN_ENABLED=true)'}`);
+  console.log(`  ofac:     ${process.env.OPENSANCTIONS_API_KEY ? 'API key set (cache will populate on /ofac/refresh)' : 'no API key (auto-flag checks return null)'}`);
 });
