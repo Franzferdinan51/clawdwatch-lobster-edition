@@ -1,8 +1,22 @@
 import express from 'express';
 import axios from 'axios';
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import { ALL_REGIONS, getDefaultFlightRegions, getRegionById, findRegion, type RegionDefinition } from './regions';
 import { RSS_FEEDS, fetchFeed, fetchFeeds, getFeedHealth, type NewsItem, type RssFeed, type FeedHealth } from './sources/rss';
 import { fetchEarthquakes, fetchUsWeatherAlerts, fetchCurrentWeather, fetchGdacsEvents, fetchDefconLevel } from './sources/intel';
+import {
+  searchSanctions,
+  traceBtcAddress,
+  traceEthAddress,
+  fetchFireHotspots,
+  fetchCve,
+  fetchRecentCves,
+  whoisLookup,
+  dnsLookup,
+  fetchTelegramChannel,
+} from './sources/osiris';
 
 const app = express();
 const PORT = 3444;
@@ -127,8 +141,8 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({
     service: 'clawdwatch-lobster-edition',
-    version: '2.1.0-lobster',
-    description: 'Global OSINT aggregator — flights, news, disasters, weather, DEFCON level',
+    version: '2.2.0-lobster',
+    description: 'Global OSINT aggregator — flights, news, disasters, weather, DEFCON, sanctions, crypto, fires, CVEs, WHOIS, DNS, Telegram',
     endpoints: {
       status:       'GET /status',
       regions:      'GET /regions',
@@ -147,6 +161,16 @@ app.get('/', (req, res) => {
       conflict:     'GET /conflict              (ME-focused legacy summary)',
       osint:        'GET /osint                 (global situational summary)',
       snapshot:     'GET /snapshot              (one-call daily brief)',
+      // OSIRIS-derived endpoints (v2.2)
+      sanctions:    'GET /sanctions?q=<name>     (OFAC SDN + OpenSanctions person/org/vessel)',
+      cryptoBtc:    'GET /crypto/btc/:address    (BTC wallet trace via blockstream.info)',
+      cryptoEth:    'GET /crypto/eth/:address    (ETH wallet trace via Blockscout)',
+      fires:        'GET /fires?hours=24&region= (NASA FIRMS active fire hotspots)',
+      cve:          'GET /cve/:id                (NVD CVE detail, e.g. CVE-2024-12345)',
+      cveRecent:    'GET /cve/recent?days=7      (recently modified CVEs)',
+      whois:        'GET /whois/:domain          (RDAP lookup, free, no key)',
+      dns:          'GET /dns/:domain            (A, AAAA, MX, TXT, NS, CNAME via Google DoH)',
+      telegram:     'GET /telegram/:channel      (public channel recent messages)',
     },
   });
 });
@@ -439,9 +463,123 @@ app.get('/snapshot', async (req, res) => {
   });
 });
 
+// ============================================================
+// OSIRIS-derived endpoints (Phase 1: intel)
+// ============================================================
+
+// GET /sanctions?q=<name> — OFAC SDN + OpenSanctions person/org/vessel search
+app.get('/sanctions', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) {
+    return res.status(400).json({ error: 'Missing required query param: q', example: '/sanctions?q=Evgeniy' });
+  }
+  const results = await searchSanctions(q);
+  res.json({
+    query: q,
+    count: results.length,
+    timestamp: new Date().toISOString(),
+    results,
+  });
+});
+
+// GET /crypto/btc/:address — BTC wallet trace via blockstream.info
+app.get('/crypto/btc/:address', async (req, res) => {
+  const info = await traceBtcAddress(req.params.address);
+  if (!info) {
+    return res.status(400).json({ error: 'Invalid BTC address', address: req.params.address });
+  }
+  res.json(info);
+});
+
+// GET /crypto/eth/:address — ETH wallet trace via Blockscout
+app.get('/crypto/eth/:address', async (req, res) => {
+  const info = await traceEthAddress(req.params.address);
+  if (!info) {
+    return res.status(400).json({ error: 'Invalid ETH address', address: req.params.address });
+  }
+  res.json(info);
+});
+
+// GET /fires?hours=24&region=middle_east — NASA FIRMS hotspots
+app.get('/fires', async (req, res) => {
+  const hours = Math.min(Math.max(parseInt(String(req.query.hours || '24'), 10) || 24, 1), 168);
+  const region = req.query.region ? String(req.query.region) : undefined;
+  const fires = await fetchFireHotspots(hours, region);
+  res.json({
+    window_hours: hours,
+    region: region || 'world',
+    count: fires.length,
+    timestamp: new Date().toISOString(),
+    hotspots: fires,
+  });
+});
+
+// IMPORTANT: /cve/recent must come BEFORE /cve/:id, otherwise Express matches "recent" as the :id.
+app.get('/cve/recent', async (req, res) => {
+  const days = parseInt(String(req.query.days || '7'), 10) || 7;
+  const minCvss = req.query.min_cvss ? parseFloat(String(req.query.min_cvss)) : undefined;
+  const cves = await fetchRecentCves(days, minCvss);
+  res.json({
+    window_days: days,
+    min_cvss: minCvss,
+    count: cves.length,
+    timestamp: new Date().toISOString(),
+    cves,
+  });
+});
+
+// GET /cve/:id — single CVE lookup (e.g. CVE-2024-12345)
+app.get('/cve/:id', async (req, res) => {
+  const cve = await fetchCve(req.params.id);
+  if (!cve) {
+    return res.status(404).json({ error: 'CVE not found or invalid format', id: req.params.id });
+  }
+  res.json(cve);
+});
+
+// GET /whois/:domain — RDAP/WHOIS lookup
+app.get('/whois/:domain', async (req, res) => {
+  const w = await whoisLookup(req.params.domain);
+  if (!w) {
+    return res.status(400).json({ error: 'Invalid domain', domain: req.params.domain });
+  }
+  res.json(w);
+});
+
+// GET /dns/:domain — DNS records (A, AAAA, MX, TXT, NS, CNAME)
+app.get('/dns/:domain', async (req, res) => {
+  const d = await dnsLookup(req.params.domain);
+  if (!d) {
+    return res.status(400).json({ error: 'Invalid domain', domain: req.params.domain });
+  }
+  res.json(d);
+});
+
+// GET /telegram/:channel — recent messages from public channel
+// (e.g. /telegram/durov, /telegram/reuters)
+app.get('/telegram/:channel', async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit || '10'), 10) || 10, 1), 30);
+  const msgs = await fetchTelegramChannel(req.params.channel, limit);
+  if (!msgs || msgs.length === 0) {
+    return res.json({
+      channel: req.params.channel,
+      count: 0,
+      messages: [],
+      note: 'No public messages found. Channel may be private or handle invalid.',
+    });
+  }
+  res.json({
+    channel: req.params.channel,
+    count: msgs.length,
+    timestamp: new Date().toISOString(),
+    messages: msgs,
+  });
+});
+
 app.listen(PORT, () => {
-  console.log(`ClawdWatch Lobster Edition v2.1 running on port ${PORT}`);
+  console.log(`ClawdWatch Lobster Edition v2.2 running on port ${PORT}`);
   console.log(`  regions:  ${ALL_REGIONS.length}`);
   console.log(`  rss:      ${RSS_FEEDS.filter((f) => f.enabled).length} feeds enabled`);
   console.log(`  defcon:   GET /defcon for current DEFCON level`);
+  console.log(`  osiris:   GET /sanctions /crypto/* /fires /cve/* /whois/* /dns/* /telegram/*`);
 });
