@@ -153,7 +153,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({
     service: 'clawdwatch-lobster-edition',
-    version: '2.2.0-lobster',
+    version: '2.4.0-lobster',
     description: 'Global OSINT aggregator — flights, news, disasters, weather, DEFCON, sanctions, crypto, fires, CVEs, WHOIS, DNS, Telegram',
     endpoints: {
       status:       'GET /status',
@@ -203,7 +203,7 @@ app.get('/status', (req, res) => {
     status: 'running',
     service: 'clawdwatch-lobster-edition',
     port: PORT,
-    version: '2.1.0-lobster',
+    version: '2.4.0-lobster',
     regions: ALL_REGIONS.length,
     newsFeeds: RSS_FEEDS.filter((f) => f.enabled).length,
     cacheActive: true,
@@ -489,7 +489,7 @@ app.get('/snapshot', async (req, res) => {
 
   res.json({
     timestamp: new Date().toISOString(),
-    version: '2.1.0-lobster',
+    version: '2.4.0-lobster',
     defcon,
     flights: {
       total: flightSummary.totalFlights,
