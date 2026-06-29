@@ -1,7 +1,7 @@
 ---
 name: clawdwatch-threat-brief
 description: "Audit ClawdWatch and synthesize a live DEFCON threat brief."
-version: 0.2.0
+version: 0.3.0
 author: Hermes
 platforms: [windows, macos, linux]
 metadata:
@@ -137,14 +137,57 @@ Run parallel fetches for:
 
 ### Step 4 — Synthesize the threat brief
 
-Produce a structured brief with:
+Produce the following EXACT format every time. Do not substitute, truncate, or summarize differently. Live data is mandatory — never skip a live fetch.
 
-1. **DEFCON status** — current level, codeword, threat score (0–100)
-2. **Threat table** — all 5 DEFCON levels with score and label
-3. **Critical flash** — any breaking events (strikes, ceasefire collapse)
-4. **Active risk drivers** — ceasefire status, Hormuz, Ukraine, North Korea, Iran nuke
-5. **Visual threat score** — ASCII bar chart
-6. **Bottom line** — one-sentence assessment and recommended watch window
+```
+🦀 ClawdWatch Threat Brief — [YYYY-MM-DD]
+
+DEFCON level / Nuclear / Global  →  ASCII bar charts + score + label (one line each)
+
+[BLANK LINE]
+
+| Level | Label | Score | Status |
+|-------|-------|-------|--------|
+| DEFCON 1 | 🔴 CRITICAL | 100 | — |
+| DEFCON 2 | 🟠 HIGH | 75 | — |
+| DEFCON 3 | 🟡 ELEVATED | 50 | — |   ← current, marked with ⬅️ CURRENT
+| DEFCON 4 | 🔵 GUARDED | 25 | — |
+| DEFCON 5 | 🟢 LOW | 0 | — |
+
+[BLANK LINE]
+
+### 🚨 BREAKING — [date or "Today"]
+
+[One-line headline event]
+
+[Table: target | location rows if applicable]
+
+[CENTCOM or relevant authority response if available]
+
+[Context: what triggered it]
+
+### [CEASEFIRE / STATUS section if applicable]
+
+| Date | Event |
+|------|-------|
+| YYYY-MM-DD | Description |
+
+[One-line status verdict]
+
+### Active Risk Drivers
+
+| Driver | Level | Notes |
+|--------|-------|-------|
+| ... | ... | ... |
+
+[At minimum: ceasefire, Hormuz, Russia-Ukraine, Iran nuke, North Korea, Pacific seismic]
+
+[BLANK LINE]
+
+**Bottom line:** [One-sentence assessment] — [recommended watch window]
+```
+
+The brief is produced AFTER the script audit, not instead of it. If the HTTP server is not running, fall back to `web_extract` on defconlevel.com directly.
 
 ### Step 5 — Build missing files if needed
 
