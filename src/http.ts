@@ -397,12 +397,49 @@ app.get('/weather', async (req, res) => {
 });
 
 // === DEFCON ===
+// GET /defcon — full enriched DEFCON response with threat score + thresholds
 app.get('/defcon', async (req, res) => {
   const status = await fetchDefconLevel();
   if (!status) {
     return res.status(502).json({ error: 'DEFCON source unavailable' });
   }
-  res.json(status);
+  res.json({
+    ...status,
+    // Enrich with threat level classification and threshold reference
+    threatLevel:
+      status.level === 1 ? 'CRITICAL'
+      : status.level === 2 ? 'HIGH'
+      : status.level === 3 ? 'ELEVATED'
+      : status.level === 4 ? 'GUARDED'
+      : 'LOW',
+    thresholds: {
+      1: { score: 100, label: 'CRITICAL', description: 'Maximum readiness. Nuclear war imminent or in progress.' },
+      2: { score: 75,  label: 'HIGH',      description: 'Armed forces mobilized. Direct military threat.' },
+      3: { score: 50,  label: 'ELEVATED',  description: 'Terrorist attack possible. Air Force ready in 15 min.' },
+      4: { score: 25,  label: 'GUARDED',   description: 'Above normal readiness. Heightened vigilance.' },
+      5: { score: 0,   label: 'LOW',       description: 'Normal peacetime readiness. No imminent threat.' },
+    },
+  });
+});
+
+// GET /defcon/score — lightweight numeric-only response (good for dashboards/grafana)
+app.get('/defcon/score', async (req, res) => {
+  const status = await fetchDefconLevel();
+  if (!status) {
+    return res.status(502).json({ error: 'DEFCON source unavailable' });
+  }
+  res.json({
+    level: status.level,
+    score: status.threatScore,
+    levelLabel:
+      status.level === 1 ? 'CRITICAL'
+      : status.level === 2 ? 'HIGH'
+      : status.level === 3 ? 'ELEVATED'
+      : status.level === 4 ? 'GUARDED'
+      : 'LOW',
+    timestamp: status.fetchedAt,
+    source: status.source,
+  });
 });
 
 // === AGGREGATES ===

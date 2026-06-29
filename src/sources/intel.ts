@@ -191,17 +191,74 @@ export async function fetchGdacsEvents(): Promise<GdacsEvent[]> {
 export interface DefconStatus {
   level: 1 | 2 | 3 | 4 | 5;
   description: string;
+  /** 0-100: DEFCON 1 = 100 (max threat), DEFCON 5 = 0 (no threat) */
+  threatScore: number;
   source: string;
   url: string;
   fetchedAt: string;
 }
 
+/**
+ * DEFCON 5 — Normal peacetime readiness.
+ * Minimum alert state. Standard operations continue with routine monitoring.
+ * No imminent threat; general awareness maintained.
+ */
+export const DEFCON_SCORE_5 = 0;
+
+/**
+ * DEFCON 4 — Above normal readiness.
+ * Possible terrorist activity or regional conflict. Increased intelligence
+ * monitoring. Heightened border and infrastructure security. Cyber threat
+ * activity elevated. All-source intel collection intensified.
+ */
+export const DEFCON_SCORE_4 = 25;
+
+/**
+ * DEFCON 3 — Armed Forces ready to mobilize in 15 minutes.
+ * Terrorist attack possible. Significant cyber intrusion campaigns active.
+ * Air defense forces on increased alert. Civilian aviation subject to
+ * enhanced screening. Public advised to maintain awareness.
+ */
+export const DEFCON_SCORE_3 = 50;
+
+/**
+ * DEFCON 2 — Next step to nuclear war; armed forces fully mobilized.
+ * Direct military threat. Terrorist attack likely. Critical infrastructure
+ * at severe risk. Strategic forces on standby. Potential for conventional
+ * or nuclear exchange elevated.
+ */
+export const DEFCON_SCORE_2 = 75;
+
+/**
+ * DEFCON 1 — Maximum readiness; nuclear war imminent or in progress.
+ * Maximum alert. All military assets mobilized. National Command Authority
+ * online. Civilian defense preparations underway. Immediate shelter protocols
+ * may be ordered. This is the highest peacetime alert ever recorded.
+ */
+export const DEFCON_SCORE_1 = 100;
+
+const DEFCON_SCORES: Record<1|2|3|4|5, number> = {
+  1: DEFCON_SCORE_1,
+  2: DEFCON_SCORE_2,
+  3: DEFCON_SCORE_3,
+  4: DEFCON_SCORE_4,
+  5: DEFCON_SCORE_5,
+};
+
+/**
+ * DEFCON Level → Threat Score (0-100).
+ * Score is linear: DEFCON 1 = 100 (max threat), DEFCON 5 = 0 (no threat).
+ */
+export function defconScore(level: 1|2|3|4|5): number {
+  return DEFCON_SCORES[level] ?? 0;
+}
+
 const DEFCON_DESCRIPTIONS: Record<1|2|3|4|5, string> = {
-  5: 'DEFCON 5 — Normal peacetime readiness',
-  4: 'DEFCON 4 — Above normal readiness, increased intel watch',
-  3: 'DEFCON 3 — Air Force ready to mobilize in 15 minutes',
-  2: 'DEFCON 2 — Next step to nuclear war, armed forces ready',
-  1: 'DEFCON 1 — Maximum readiness, nuclear war imminent or in progress',
+  5: 'DEFCON 5 — Normal peacetime readiness. Standard monitoring posture. No imminent threat.',
+  4: 'DEFCON 4 — Above normal readiness. Possible terrorist activity or regional conflict. Heightened vigilance.',
+  3: 'DEFCON 3 — Armed Forces ready to mobilize in 15 minutes. Terrorist attack possible. Air defense alert.',
+  2: 'DEFCON 2 — Armed forces mobilized. Direct military threat. Terrorist attack likely. Critical infrastructure at severe risk.',
+  1: 'DEFCON 1 — Maximum readiness. Nuclear war imminent or in progress. ALL systems critical.',
 };
 
 export async function fetchDefconLevel(): Promise<DefconStatus | null> {
@@ -231,6 +288,7 @@ export async function fetchDefconLevel(): Promise<DefconStatus | null> {
     return {
       level,
       description: DEFCON_DESCRIPTIONS[level],
+      threatScore: defconScore(level),
       source: 'defconlevel.com',
       url: 'https://www.defconlevel.com/current-level',
       fetchedAt: new Date().toISOString(),
